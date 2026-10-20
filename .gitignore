@@ -35,3 +35,8 @@ pnpm-debug.log*
 
 # Working notes
 .planning/
+
+# Android generated files and private signing keys
+android/build/
+*.jks
+*.keystore
