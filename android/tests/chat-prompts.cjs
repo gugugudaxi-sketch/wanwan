@@ -31,5 +31,18 @@ process.on('unhandledRejection',error=>{console.error('UNHANDLED',error);process
  workbench.querySelector('#prompt-parameters').click();assert.equal(window.document.querySelectorAll('[data-feature]').length,window.WANWAN_PROMPT_FEATURES.length);
  window.document.querySelector('[data-feature="wechat.generateAIReply"]').click();assert(window.document.querySelector('#param-max_tokens'));
  console.log('PASS quote punctuation/multiline; sticker image snapshot+legacy fallback; gift vs pay and delivery; '+catalog.length+' default/editable templates; per-feature API params; settings/editor UI');
+ // Full-screen editing keeps the same draft; returning does not write configuration.
+ const sourceEditor=window.document.querySelector('#prompt-template-page #prompt-text');
+ window.document.querySelector('#prompt-expand').click();
+ const full=window.document.querySelector('#prompt-fullscreen-text');assert(full);assert.equal(full.value,sourceEditor.value);
+ full.value='全屏修改后的草稿';full.dispatchEvent(new window.Event('input',{bubbles:true}));
+ assert.equal(sourceEditor.value,'全屏修改后的草稿');window.document.querySelector('#prompt-fullscreen-page .header-back').click();
+ assert.equal(sourceEditor.value,'全屏修改后的草稿');
+ // Conversation wallpapers override beauty backgrounds and survive reading saved appearance.
+ const chatPage=window.document.createElement('div');chatPage.innerHTML='<div id="chat-messages" class="chat-messages"></div>';window.document.body.appendChild(chatPage);
+ const wall='data:image/png;base64,dGVzdA==';await window.db.config.put({key:'chatAppearance_101',value:{backgroundImage:wall}});
+ await window.applyChatAppearance(chatPage,101);const surface=chatPage.querySelector('.chat-messages');assert(surface.style.backgroundImage.includes(wall));assert.equal(surface.style.getPropertyPriority('background-image'),'important');
+ window.applyChatAppearanceValue(chatPage,{backgroundImage:''});assert.equal(surface.style.getPropertyValue('background-image'),'');assert(!surface.dataset.conversationWallpaper);
+ console.log('PASS fullscreen draft return; persisted wallpaper application and reset');
  await window.happyDOM.abort();window.close();await window.db.delete();
 })().catch(e=>{console.error(e);process.exitCode=1;setTimeout(()=>process.exit(1),100);});

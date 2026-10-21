@@ -3493,6 +3493,20 @@ function applyChatAppearanceValue(chatPage, value) {
   chatPage.style.setProperty('--avatar-size', appearance.avatarSize + 'px')
   chatPage.style.setProperty('--avatar-radius', appearance.avatarRadius + 'px')
   chatPage.style.setProperty('--chat-bg-image', appearance.backgroundImage ? `url(${JSON.stringify(appearance.backgroundImage)})` : 'none')
+  // A selected conversation wallpaper takes precedence over a preset background shorthand.
+  const messages = chatPage.querySelector('#chat-messages, .chat-messages')
+  if (messages) {
+    if (appearance.backgroundImage) {
+      messages.style.setProperty('background-image', `url(${JSON.stringify(appearance.backgroundImage)})`, 'important')
+      messages.style.setProperty('background-size', 'cover', 'important')
+      messages.style.setProperty('background-position', 'center', 'important')
+      messages.style.setProperty('background-repeat', 'no-repeat', 'important')
+      messages.dataset.conversationWallpaper = '1'
+    } else if (messages.dataset.conversationWallpaper === '1') {
+      for (const key of ['background-image', 'background-size', 'background-position', 'background-repeat']) messages.style.removeProperty(key)
+      delete messages.dataset.conversationWallpaper
+    }
+  }
   chatPage.classList.toggle('hide-self-avatar', appearance.hideSelfAvatar)
   chatPage.classList.toggle('hide-other-avatar', appearance.hideOtherAvatar)
 }
