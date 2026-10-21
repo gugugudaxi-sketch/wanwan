@@ -1710,7 +1710,7 @@
 
   function renderChapterPlan() {
     var draft = state.chapterDraft || {}
-    if (!draft.bookId) return '<section class="bookstore-author-tool">' + renderAuthorSubHead('章节规划') + '<div class="bookstore-empty">请先选择作品并生成故事情节。</div></section>'
+    if (!draft.bookId) return ("<section class=\"bookstore-author-tool\">" + (renderAuthorSubHead('章节规划')) + "<div class=\"bookstore-empty\">请先选择作品并生成故事情节。</div></section>")
     var plans = ensureDraftChapterPlans(draft)
     return '<section class="bookstore-author-tool">' +
       renderAuthorSubHead('章节规划', 'create-chapter') +
@@ -1827,24 +1827,24 @@
   }
 
   function buildStoryOutlinePrompt(book, draft) {
-    return '<role>\n你是小说策划助手。\n</role>\n\n<task>\n根据用户给出的书籍信息、内容介绍、绑定角色和角色关系描述，生成可用于后续分章写作的故事走向。\n</task>\n\n<rules>\n1. 只输出中文。\n2. 不要替用户新增未出现的核心角色，除非剧情发展确有必要；若新增，须说明理由。\n3. 必须严格尊重角色档案中的人物设定和关系描述；冲突时优先调整剧情，而非违背角色设定。\n4. 剧情走向应符合分类与标签所代表的题材惯例。\n5. 故事走向需包含开端、推进、转折、高潮、收束，并大致对应目标篇幅。\n6. 不要写成正文，只写创作规划；不涉及具体文风，文风将在后续阶段单独应用。\n</rules>\n\n<input>\n- 书名：' + (book.title || '') + '\n- 作者：' + (book.author || '') + '\n- 分类：' + (book.category || '') + '\n- 标签：' + bookUserTags(book.tags).join('、') + '\n- 内容介绍：' + (book.intro || '') + '\n- 绑定角色：' + characterRelationText(book) + '\n- 目标篇幅：' + chapterRangeText(draft) + '\n- 用户补充：' + (draft.userDirection || '无') + '\n</input>\n\n<output_format>\n【故事核心】...\n【主要矛盾】...\n【剧情走向】\n1. ... \n2. ... \n3. ...（按目标篇幅给出节点数量及对应章节范围）\n【结尾方向】...\n【备注】（新增角色说明或"无"）\n</output_format>'
+    return window.WanWanPrompts.render("bookstore.buildStoryOutlinePrompt.6a08b6ca4", [book.title || '', book.author || '', book.category || '', bookUserTags(book.tags).join('、'), book.intro || '', characterRelationText(book), chapterRangeText(draft), draft.userDirection || '无'])
   }
 
   function buildChapterPlanPrompt(book, draft) {
-    return '<role>\n你是小说分章策划助手。\n</role>\n\n<task>\n根据已生成的整体故事走向（剧情核心、主要矛盾、剧情走向、结尾方向），结合用户指定的章节数量范围与单章字数范围，将故事拆解为逐章的写作蓝图，供后续逐章写正文时使用。\n</task>\n\n<rules>\n1. 只输出中文。\n2. 章节总数必须落在用户给定的范围内；每章字数目标必须落在用户给定的范围内，且各章字数目标总和应大致匹配整体篇幅预期。\n3. 每一章必须明确：本章承接上一章的什么状态、本章核心事件、本章结尾悬念或情绪落点（钩子），确保章与章之间衔接不断裂。\n4. 严格遵守已确定的角色设定与关系，不得提前透支本应在后续转折/高潮章节才揭示的信息。\n5. 开端、推进、转折、高潮、收束五个阶段必须能映射到具体章节区间，不能模糊带过。\n6. 不写正文，只写章节蓝图；不涉及具体文风。\n</rules>\n\n<input>\n- 整体故事走向：' + (draft.storyOutline || '') + '\n- 绑定角色与关系：' + characterRelationText(book) + '\n- 章节数量范围：' + draft.countMin + '-' + draft.countMax + '章\n- 单章字数范围：' + draft.wordMin + '-' + draft.wordMax + '字\n- 用户补充：' + (draft.userDirection || '无') + '\n</input>\n\n<output_format>\n优先输出 JSON 数组，不要使用 Markdown 代码块，不要输出解释文字。\n\n[\n  {\n    "chapter_number": 1,\n    "continuity": "开篇，无上一章状态",\n    "core_event": "...",\n    "characters": ["角色A", "角色B"],\n    "hook": "...",\n    "word_target": "' + draft.wordMin + '-' + draft.wordMax + '字",\n    "prompt": "第1章\\n- 承接：...\\n- 本章核心事件：...\\n- 出场角色：角色A、角色B\\n- 结尾钩子：...\\n- 字数目标：' + draft.wordMin + '-' + draft.wordMax + '字"\n  }\n]\n\n如果无法输出 JSON，则输出 Markdown，每章必须以“第X章”或“第 X 章”开头。\n</output_format>'
+    return window.WanWanPrompts.render("bookstore.buildChapterPlanPrompt.621f22145", [draft.storyOutline || '', characterRelationText(book), draft.countMin, draft.countMax, draft.wordMin, draft.wordMax, draft.userDirection || '无', draft.wordMin, draft.wordMax, draft.wordMin, draft.wordMax])
   }
 
   function buildSummaryPrompt(previousSummary, newText, prevEnd, start, end) {
-    return '<role>\n你是小说剧情总结助手。\n</role>\n\n<task>\n将"已有剧情总结"与"新增章节原文"合并，生成更新后的剧情总结，用于后续章节写作时的上下文记忆，替代原始正文进行注入。\n</task>\n\n<rules>\n1. 只输出中文。\n2. 必须保留：当前各角色的状态/位置/情绪走向、未解决的悬念与矛盾、角色之间关系的最新变化、对后续剧情有影响的关键事件细节。\n3. 可以压缩或省略：环境描写、心理活动的细节展开、与后续无关的过场对话。\n4. 如果"已有剧情总结"长度已经较长，本次需在合并基础上进一步精简旧内容的表达，但不能删除规则2中要求保留的信息点。\n5. 不写成正文，只写信息密度高的总结性文字。\n6. 不要输出与总结无关的说明文字。\n</rules>\n\n<input>\n- 已有剧情总结（覆盖第1章-第' + prevEnd + '章，可能为空）：' + (previousSummary || '') + '\n- 新增章节原文（第' + start + '章-第' + end + '章）：' + newText + '\n</input>\n\n<output_format>\n（直接输出合并后的新总结正文，不加标题、不加章节列表）\n</output_format>'
+    return window.WanWanPrompts.render("bookstore.buildSummaryPrompt.2a94f2650", [prevEnd, previousSummary || '', start, end, newText])
   }
 
   function buildChapterBodyPrompt(book, draft, chapterPlan, previousContext) {
-    return '<role>\n你是小说正文写作助手，需要严格按照指定文风进行创作。\n</role>\n\n<task>\n根据本章写作蓝图、角色档案、上一章结尾状态，以指定文风写出本章正文。\n</task>\n\n<rules>\n1. 严格套用{{writing_style}}标签中的文风规则（句式节奏、感官选择、潜台词处理、避免事项等），不得混用其他文风习惯。\n2. 字数需落在{{chapter_word_range_single}}范围内。\n3. 必须承接"上一章结尾状态"，不能与上一章内容矛盾或重复已写过的信息。\n4. 必须完成本章蓝图中规定的核心事件，并在结尾落到指定的钩子上；不得提前写出后续章节才该揭示的剧情。\n5. 角色言行必须符合角色档案中的人物设定与关系逻辑，不得擅自改变人物性格基调。\n6. 只输出正文本身，不要输出蓝图复述、不要输出说明性文字、不要加章节以外的旁注。\n</rules>\n\n<input>\n- 文风：' + writingStyleTag(selectedWritingStyle(draft.styleId)) + '\n- 本章蓝图：' + chapterPlan + '\n- 上一章结尾状态摘要：' + (previousContext || '无，当前为开篇。') + '\n- 角色档案（含出场角色的性别、身份、人物设定）：' + characterRelationText(book) + '\n- 角色关系：' + characterRelationText(book) + '\n- 单章字数范围：' + draft.wordMin + '-' + draft.wordMax + '字\n</input>\n\n<output_format>\n（直接输出本章正文，不加任何标题前缀或说明）\n</output_format>'
+    return window.WanWanPrompts.render("bookstore.buildChapterBodyPrompt.8ec327534", [writingStyleTag(selectedWritingStyle(draft.styleId)), chapterPlan, previousContext || '无，当前为开篇。', characterRelationText(book), characterRelationText(book), draft.wordMin, draft.wordMax])
   }
 
   async function callBookstoreAI(prompt) {
     if (typeof window.callAI !== 'function') throw new Error('请先在设置里配置 API')
-    var text = await window.callAI([{ role: 'user', content: prompt }], { temperature: await window.getAITemperaturePreset('readenNovel') })
+    var text = await window.callAI([{ role: 'user', content: prompt }], window.WanWanPrompts.options("bookstore.callBookstoreAI", ({ temperature: await window.getAITemperaturePreset('readenNovel') })))
     text = String(text || '').trim()
     if (!text) throw new Error('AI 返回为空')
     return text
@@ -1890,12 +1890,7 @@
     var number = item.chapter_number || item.chapterNumber || (index + 1)
     var characters = Array.isArray(item.characters) ? item.characters.join('、') : String(item.characters || '')
     var wordTarget = item.word_target || item.wordTarget || ((draft.wordMin || 4500) + '-' + (draft.wordMax || 6500) + '字')
-    return '第' + number + '章\n' +
-      '- 承接：' + String(item.continuity || '') + '\n' +
-      '- 本章核心事件：' + String(item.core_event || item.coreEvent || '') + '\n' +
-      '- 出场角色：' + characters + '\n' +
-      '- 结尾钩子：' + String(item.hook || '') + '\n' +
-      '- 字数目标：' + String(wordTarget || '')
+    return window.WanWanPrompts.render("bookstore.chapterObjectToPrompt.1aa36b1ea", [number, String(item.continuity || ''), String(item.core_event || item.coreEvent || ''), characters, String(item.hook || ''), String(wordTarget || '')])
   }
 
   function jsonChapterPlans(raw, draft) {

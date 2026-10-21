@@ -214,101 +214,7 @@ function sanitizePhoneSnapshotData(rawData, userName) {
 function buildPhoneSnapshotSystemPrompt(char, user) {
   const charName = char?.nick || char?.name || '角色'
   const userName = user?.nick || user?.name || '用户'
-  return `你是一个角色扮演世界的「手机内容生成器」。用户正在查看角色【${charName}】的手机微信，你需要一次性生成这部手机里的完整微信内容快照：好友列表、聊天记录、朋友圈、钱包。
-
-# 核心视角
-- 这是【${charName}】的私人手机。所有内容都从 TA 的视角呈现：TA 和别人的聊天、TA 能看到的朋友圈、TA 的钱包。
-- 生成的内容是"被偷看"的真实生活切片：角色在和朋友聊天时会流露真实态度和秘密，包括对【${userName}】的真实看法、不会当面说的心里话、最近的烦恼和计划。这是本功能最核心的乐趣，必须体现。
-- 内容必须与角色人设、世界观、以及提供的「角色与用户的真实聊天记录」在时间线和事实上完全一致，可以自然呼应近期剧情。
-
-# 好友与聊天记录规则
-1. 若提供了「关联NPC列表」：必须为列表中的每一个NPC生成一段聊天记录，聊天内容严格符合该NPC的人设及其与角色的关系描述。
-2. 若没有关联NPC：虚构 3-5 个符合角色生活圈的好友（同事/同学/家人/朋友等，依据人设推断），并为每人生成聊天记录。
-3. 【绝对禁止】生成角色与【${userName}】之间的聊天记录——这部分由系统同步真实数据，你生成会造成冲突。好友列表里也不要包含【${userName}】。
-4. 聊天必须像真实微信：口语化、碎片化、有短句连发、有表情、有语音条/图片（用文字描述）、有时间跳跃（几小时/几天前的消息）。禁止小说体、禁止每条消息都完整工整。
-5. 每段会话 8-25 条消息，不同好友的亲疏程度要体现在聊天频率和语气上。
-6. 聊天中可以自然出现转账（type 为 transfer，符合关系与剧情才出现，不强求）；这些转账会被系统提取为钱包账单，所以金额和方向要合理。
-
-# 朋友圈规则
-1. 生成 4-8 条朋友圈动态，按时间倒序，时间跨度约最近两周。
-2. 必须同时包含：角色本人发的动态（2-4条） + 好友/NPC发的动态。
-3. 每条动态可含文字、图片描述、点赞列表、评论（评论者只能是本次出现的好友或角色本人，评论要符合各自人设）。
-4. 角色本人的动态要符合 TA 的发圈习惯（话痨/高冷/仅分享音乐等，依人设推断），可与近期剧情呼应。
-
-# 钱包规则
-只生成三个账户的余额数字：微信零钱（balance）、Checking Account（checkingBalance）、Saving Account（savingBalance）。
-
-总资产参考标准（依据人设推断经济状况）：
-- 极度贫困/流浪：50.00 ~ 200.00
-- 贫困/拮据：200.00 ~ 800.00
-- 普通学生：500.00 ~ 2000.00
-- 普通打工人/工薪阶层：1000.00 ~ 5000.00
-- 小康/普通白领：3000.00 ~ 20000.00
-- 中产/高收入人群：10000.00 ~ 50000.00
-- 富裕/富二代：50000.00 ~ 500000.00
-- 顶级富豪/企业家：1000000.00 以上
-
-分配规则：
-1. 严格依据角色人设生成，禁止使用默认值或随机值。
-2. 角色有多重属性时（如"落魄富二代"），以当前实际经济状态为准。
-3. 性格节俭者总资产取区间上限，挥霍/大方者取区间下限。
-4. 古代/架空背景换算参考：1两银子 ≈ 500元人民币。
-5. 三账户分配逻辑：零钱用于日常小额支付、金额最小，贫困角色可能仅剩少量零钱；Checking 为日常消费流水账户、金额适中；Saving 为长期储蓄，贫困/拮据角色可为 0.00；总和须落在对应区间内。
-6. 数字保留两位小数。
-
-# 增量模式规则（仅当提供了「已有微信生成数据」时生效）
-1. 已有数据是这部手机此前的真实状态，【绝对禁止】改写、删除或重新生成其中的任何内容；你生成的是"这之后又发生的事"。
-2. 输出结构与全量相同，但只输出**新增部分**：
-   - friends：只放新增好友（没有就返回空数组）；已有好友不要重复输出。
-   - chats：只放新增消息。给已有好友续聊时，friendName 用已有好友的 name，messages 里只放新消息（时间必须晚于该会话已有的最后一条）；新好友则输出完整的新会话。
-   - moments：只放新动态（时间晚于已有最新动态）；点赞和评论者仍只能是已出现过的好友或角色本人。
-   - wallet：输出三个账户更新后的最新余额（通常与已有余额一致或小幅变动，变动要能被聊天中的交易解释）。
-3. 新内容必须与已有内容在人物关系、事件、语气上连续，可自然推进已有话题；也要呼应「角色与用户的真实聊天记录」中晚于上次生成的新剧情。
-4. 无增量注入时按全量模式输出完整快照，忽略本节。
-
-# 输出格式
-只输出一个 JSON 对象，不要输出任何其他文字、注释或 markdown 代码块标记。结构如下：
-
-{
-  "friends": [
-    {
-      "npcId": 关联NPC的id数字,虚构好友则为 null,
-      "name": "微信昵称",
-      "remark": "角色给TA设的备注(可与昵称相同)",
-      "gender": "男/女/未知",
-      "relation": "与角色的关系,如 同事/发小/哥哥"
-    }
-  ],
-  "chats": [
-    {
-      "friendName": "对应 friends 中的 name",
-      "messages": [
-        {
-          "sender": "me" 表示角色本人 / "friend" 表示对方,
-          "type": "text" | "image" | "voice" | "transfer" ,
-          "content": "文字内容;image/voice 时为画面或语音内容的文字描述;transfer 时为附言",
-          "amount": 数字,仅 transfer 需要,
-          "time": "相对时间,如 昨天 22:14 / 周二 09:30 / 3天前 18:02"
-        }
-      ]
-    }
-  ],
-  "moments": [
-    {
-      "author": "me" 或好友的 name,
-      "time": "相对时间,如 2小时前 / 昨天 / 6月28日",
-      "text": "动态文字",
-      "imagesDesc": ["每张配图的一句话描述"] 或 [],
-      "likes": ["点赞者name", ...],
-      "comments": [ { "from": "评论者name", "to": "被回复者name或null", "text": "评论内容" } ]
-    }
-  ],
-  "wallet": {
-    "balance": 微信零钱余额数字,
-    "checkingBalance": Checking Account 余额数字,
-    "savingBalance": Saving Account 余额数字
-  }
-}`
+  return window.WanWanPrompts.render("phone-wechat.buildPhoneSnapshotSystemPrompt.9be513b6f", [charName, charName, userName, userName, userName])
 }
 
 function formatPhoneSnapshotCurrentTime(now = new Date()) {
@@ -416,7 +322,7 @@ function buildPhoneSnapshotExistingBlock(data) {
   })
   const wallet = data.wallet || {}
   lines.push(`· 钱包余额：零钱 ${wallet.balance ?? '未知'}｜Checking ${wallet.checkingBalance ?? '未知'}｜Saving ${wallet.savingBalance ?? '未知'}`)
-  lines.push('以上内容不可改动，请只输出这之后新增的内容。')
+  lines.push(window.WanWanPrompts.render("phone-wechat.补充规则.2b7bdb51d", []))
   return lines.join('\n')
 }
 
@@ -425,42 +331,8 @@ async function buildPhoneSnapshotUserPrompt(char, user, npcs, loreCtx, recentMes
   const nickPart = char?.nick && char.nick !== char.name ? `（昵称：${char.nick}）` : ''
   const existingBlock = existingData
     ? buildPhoneSnapshotExistingBlock(existingData)
-    : '(无。请生成完整快照。)'
-  return `请为下面这个角色生成 TA 的手机微信内容快照。
-
-【当前时间】${formatPhoneSnapshotCurrentTime()}
-
-【角色档案】(这是手机的主人)
-名字：${charName}${nickPart}
-性别：${char?.gender || '未知'}
-身份：${char?.role || '(未设定)'}
-人设：
-${char?.description || '(未设定)'}
-微信号：${char?.identity?.account || '(未设定)'}
-
-【用户档案】(正在查看这部手机的人,角色的聊天对象)
-名字：${user?.nick || user?.name || '用户'}
-${user?.gender ? `性别：${user.gender}` : ''}
-${user?.role ? `身份：${user.role}` : ''}
-人设：
-${user?.description || '(未设定)'}
-
-【角色与用户的关系】
-${buildPhoneSnapshotRelationText(char, user?.id)}
-
-【关联NPC列表】
-${buildPhoneSnapshotNpcBlock(npcs)}
-
-【世界书设定】(如有绑定)
-${loreCtx || '(无)'}
-
-【已有微信生成数据】
-${existingBlock}
-
-【角色与用户的真实聊天记录】(用于:呼应近期剧情、推断余额变动;禁止改写或重新生成这段对话)
-${recentMessagesText}
-
-请严格按 system 中定义的 JSON 结构输出。`
+    : window.WanWanPrompts.render("phone-wechat.buildPhoneSnapshotUserPrompt.4d379d73d", [])
+  return window.WanWanPrompts.render("phone-wechat.buildPhoneSnapshotUserPrompt.2b0e6c5cd", [formatPhoneSnapshotCurrentTime(), charName, nickPart, char?.gender || '未知', char?.role || '(未设定)', char?.description || '(未设定)', char?.identity?.account || '(未设定)', user?.nick || user?.name || '用户', user?.gender ? `性别：${user.gender}` : '', user?.role ? `身份：${user.role}` : '', user?.description || '(未设定)', buildPhoneSnapshotRelationText(char, user?.id), buildPhoneSnapshotNpcBlock(npcs), loreCtx || '(无)', existingBlock, recentMessagesText])
 }
 
 window.buildPhoneSnapshotSystemPrompt = buildPhoneSnapshotSystemPrompt
@@ -539,11 +411,11 @@ async function generatePhoneWechatSnapshot(ownerUid, charId) {
 
   const system = buildPhoneSnapshotSystemPrompt(char, user)
   const userPrompt = await buildPhoneSnapshotUserPrompt(char, user, npcs, loreCtx, recentBlock.text, existingData)
-  const raw = await window.callAI([{ role: 'user', content: userPrompt }], {
+  const raw = await window.callAI([{ role: 'user', content: userPrompt }], window.WanWanPrompts.options("phone-wechat.generatePhoneWechatSnapshot", ({
     system,
     responseFormat: 'json_object',
     temperature: await getPhoneSnapshotTemperature()
-  })
+  })))
   const parsed = extractPhoneSnapshotJson(raw)
   if (!parsed) throw new Error('AI 返回格式异常，请重试')
   const cleaned = sanitizePhoneSnapshotData(parsed, userName)

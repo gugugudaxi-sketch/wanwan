@@ -1,20 +1,7 @@
 (function() {
   'use strict'
 
-  var DOOR_SYSTEM_PROMPT = [
-    '你是“任意门 HTML 模块运行器”。你的任务是根据 USER 资料、好友角色人设、近期对话、场景主题和当前 HTML 模块，生成一份可以直接运行的完整 HTML 文档。',
-    '',
-    '你必须遵守以下规则：',
-    '',
-    '1. 只输出完整 HTML，从 <!DOCTYPE html> 开始，以 </html> 结束。',
-    '2. 不要输出 Markdown 代码围栏、解释、前言、后记或任何 HTML 之外的文字。',
-    '3. 必须遵循当前 HTML 模块提供的生成模板。可以替换模板中的内容、颜色、文字和局部布局，但不得删除模块要求的核心结构。',
-    '4. 生成内容必须符合角色人设、说话方式、与 USER 的关系以及近期对话，不得随意改变人物性格或捏造重大关系事实。',
-    '5. 优先使用近期对话中已经出现的细节，让页面看起来是专属于当前 USER 和角色的内容。',
-    '6. 保留模块原有的功能和交互方式。模块允许包含 CSS、JavaScript、图片、音频、视频、表单、解密输入或其他模块本身需要的内容。',
-    '7. 根据当前模块的布局和用途合理控制内容长度，避免文字溢出或破坏主要排版。',
-    '8. 最终 HTML 必须语法完整，替换所有需要生成的占位内容，并能直接写入 iframe 的 srcdoc 运行。'
-  ].join('\n')
+  var DOOR_SYSTEM_PROMPT = window.WanWanPrompts.render("anywhere-door.全局规则.b83632795", [])
 
   var currentDoorRequest = null
   var doorFrameState = new WeakMap()
@@ -274,35 +261,7 @@
 
   function buildUserPrompt(module, context, topic, extraRequest) {
     function value(input) { return input == null || input === '' ? '无' : input }
-    return [
-      '请根据以下资料生成任意门 HTML。',
-      '',
-      '【本次主题】',
-      value(topic),
-      '',
-      '【补充要求】',
-      value(extraRequest),
-      '',
-      '【USER 资料】',
-      JSON.stringify(context.userProfile, null, 2),
-      '',
-      '【好友角色资料】',
-      JSON.stringify(context.characterProfile, null, 2),
-      '',
-      '【近期对话】',
-      value(context.conversation),
-      '',
-      '【当前模块名称】',
-      value(module.name),
-      '',
-      '【当前模块专属要求】',
-      value(module.prompt),
-      '',
-      '【当前模块的 HTML 生成模板】',
-      module.htmlTemplate,
-      '',
-      '请直接返回完整 HTML，不要返回解释或 Markdown 代码围栏。'
-    ].join('\n')
+    return window.WanWanPrompts.render("anywhere-door.buildUserPrompt.f8ae1ce53", [value(topic), value(extraRequest), JSON.stringify(context.userProfile, null, 2), JSON.stringify(context.characterProfile, null, 2), value(context.conversation), value(module.name), value(module.prompt), module.htmlTemplate])
   }
 
   window.showAnyDoorPage = async function() {
@@ -548,7 +507,7 @@
       validateHtmlInput(module.htmlTemplate, true)
       var context = await collectDoorContext(state.userId, state.characterId)
       var prompt = buildUserPrompt(module, context, state.topic, state.extraRequest)
-      var raw = await window.callAI([{ role: 'user', content: prompt }], { system: DOOR_SYSTEM_PROMPT, temperature: await window.getAITemperaturePreset('anywhereDoorHtml') })
+      var raw = await window.callAI([{ role: 'user', content: prompt }], window.WanWanPrompts.options("anywhere-door.runDoorModule", ({ system: DOOR_SYSTEM_PROMPT, temperature: await window.getAITemperaturePreset('anywhereDoorHtml') })))
       if (request.cancelled) return
       var html = extractGeneratedHtml(raw)
       var now = Date.now()

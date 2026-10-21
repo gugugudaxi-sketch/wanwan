@@ -1022,7 +1022,7 @@ async function showNPCGenerateModal(listPage) {
 
 // ===== 调用AI生成NPC =====
 async function generateNPCs(count, req, charId, lorebookIds) {
-  const system = '你是角色设计师，请返回JSON数组，不要有其他内容。'
+  const system = window.WanWanPrompts.render("character.generateNPCs.d5cb89d72", [])
 
   let char = null
   if (charId) char = await db.characters.get(charId)
@@ -1048,13 +1048,13 @@ async function generateNPCs(count, req, charId, lorebookIds) {
 
   const hasContext = char || otherLorebookText
 
-  let prompt = `深度创作 ${count} 个相关的 NPC 角色。\n特别剧情要求：${req || '无'}\n`
+  let prompt = window.WanWanPrompts.render("character.generateNPCs.f29da05a5", [count, req || '无'])
 
   if (hasContext) {
-    prompt += '\n请根据以下【主角信息】和【世界设定】具体设定\n'
+    prompt += window.WanWanPrompts.render("character.generateNPCs.2b03ed19f", [])
 
     if (char) {
-      prompt += `\n【主角信息】\n名字：${char.name}\n设定：${char.description || '无'}\n`
+      prompt += window.WanWanPrompts.render("character.generateNPCs.33a617965", [char.name, char.description || '无'])
       if (charLorebookText) prompt += `\n${charLorebookText}\n`
     }
 
@@ -1062,33 +1062,18 @@ async function generateNPCs(count, req, charId, lorebookIds) {
       prompt += `\n【世界设定】\n${otherLorebookText}\n`
     }
 
-    prompt += `
-【生成要求】
-1. **世界观锚定**：NPC 必须与世界观（Lorebook）紧密结合，基于已知设定（地名、势力、规则、种族、历史事件等），不得随意杜撰与世界观冲突的元素。
-2. **细节丰富**：外貌（衣着和体貌特征）、性格（口癖或习惯性动作）、背景（具体成长或生活经历）等，拒绝空洞描述。
-3. **多样性**：生成的角色性格和身份应各不相同，除非【特别剧情要求】另有指定。
-`
+    prompt += window.WanWanPrompts.render("character.generateNPCs.0efe900ce", [])
   }
 
-  prompt += `
-请返回一个 JSON 数组，每个对象包含：
-- name: 名字
-- nickname: 昵称（可选）
-- gender: 性别（未知/男/女/其他）
-- appearance: 外貌描写（详细，如发色、瞳色、服装风格）
-- personality: 性格特征（详细，如高冷、热血、腹黑）
-- background: 背景故事（${hasContext ? '结合【主角信息】和【世界设定】具体设定的个人经历' : '详细的个人成长与生活经历'}）`
+  prompt += window.WanWanPrompts.render("character.generateNPCs.172eb3360", [hasContext ? '结合【主角信息】和【世界设定】具体设定的个人经历' : '详细的个人成长与生活经历'])
 
   if (char) {
-    prompt += `
-- relation: NPC与主角的关系类型（一个词，如：女友、损友）
-- reverse_relation: 主角对该NPC的关系类型（一个词，如：男友、哥们）
-- relation_desc: 关系详情描述（具体的互动模式）`
+    prompt += window.WanWanPrompts.render("character.generateNPCs.3c6cda3d3", [])
   }
 
-  prompt += '\n\n请严格返回 JSON 格式，不要包含 Markdown 代码块标记。'
+  prompt += window.WanWanPrompts.render("character.generateNPCs.ef8ff919d", [])
 
-  const result = await window.callAI([{ role: 'user', content: prompt }], { system, temperature: 0.4 })
+  const result = await window.callAI([{ role: 'user', content: prompt }], window.WanWanPrompts.options("character.generateNPCs", ({ system, temperature: 0.4 })))
   const match = result.match(/\[[\s\S]*\]/)
   if (!match) throw new Error('AI返回格式错误')
   const npcs = JSON.parse(match[0])

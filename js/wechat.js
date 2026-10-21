@@ -2080,7 +2080,7 @@ function formatWechatClockTime(ts, timeZone) {
 // ===== 消息类型解析器 =====
 function parseMsgType(content, charName, myName) {
   if (!content) return { type: 'text', data: { text: '' } }
-  const c = content.trim()
+  const c = normalizeSpecialMessage(content)
   // 真实照片（特殊前缀）
   if (c.startsWith('__IMG__')) return { type: 'real-photo', data: { src: c.slice(7) } }
   if (c.startsWith('__LINK__')) return { type: 'link', data: parseLinkPayload(c.slice(8)) }
@@ -2381,10 +2381,26 @@ function buildYumDealFallbackText(data) {
   if (deal.dealType === 'gift') {
     return `[外卖赠送｜来源：YumYum${shop}｜商品：${itemsText}｜金额：¥${yumDealMoneyText(deal.total)}｜对方点了一份外卖请你，你可以选择收下或退回。收下请回复「[我收下了你的外卖]」，退回请回复「[我退回了你的外卖]」]`
   }
-  return `[外卖代付请求｜来源：YumYum${shop}｜商品：${itemsText}｜合计：¥${yumDealMoneyText(deal.total)}｜对方点了外卖请你帮忙付款，付款后才会生成订单号与送达时间。愿意付款请回复「[我帮你付了外卖代付]」，拒绝请回复「[我拒绝了你的外卖代付]」]`
+  return window.WanWanPrompts.render("wechat.buildYumDealFallbackText.d6b7051a1", [shop, itemsText, yumDealMoneyText(deal.total)])
 }
 
 // 解析特殊消息格式
+// Normalize punctuation only inside recognized special messages; ordinary prose is untouched.
+function normalizeSpecialMessage(content) {
+  let c = String(content || '').trim()
+  const looksSpecial = /^(?:\[|【)[\s\S]*(?:引用|的表情包|的语音|发来的照片|的外卖|的淘宝|的转账|的位置|并回复)/.test(c)
+  if (!looksSpecial) return c
+  c = c.replace(/^【/, '[').replace(/】$/, ']')
+  if (/引用/.test(c)) {
+    c = c.replace(/引用\s*[“「]/, '引用"').replace(/[”」]\s*并回复\s*[:：]/, '"并回复：')
+      .replace(/引用\s*"/, '引用"').replace(/"\s*并回复\s*[:：]/, '"并回复：')
+    c = c.replace(/引用"([^"\n]*?)[:：]\s*/, '引用"$1：')
+  }
+  c = c.replace(/(的表情包|的语音|发来的照片|的外卖代付|的外卖赠送|的淘宝代付|的淘宝赠送|的位置|的转账)\s*[:：]\s*/g, '$1：')
+  if (/的(?:外卖|淘宝|转账)/.test(c)) c=c.replace(/;/g,'；')
+  return c
+}
+
 function parseSpecialMsg(c) {
   let m
   // 拍一拍
@@ -2407,7 +2423,7 @@ function parseSpecialMsg(c) {
   if (m) return { type: 'yum-deal', data: normalizeYumDealPayload({ dealType: m[1] === '赠送' ? 'gift' : 'pay', title: m[2], total: parseFloat(m[3]), origin: 'char-text' }) }
   // 表情包
   m = c.match(/^\[.+的表情包：(.*)\]$/)
-  if (m) return { type: 'sticker', data: { name: m[1] } }
+  if (m) return { type: 'sticker', data: { name: m[1].trim() } }
   return parseResponseMsg(c)
 }
 
@@ -2899,7 +2915,7 @@ async function buildEnhancedImagePrompt(rawDesc, chatId) {
   const parts = []
 
   if (imageGenSettings.charImagePrompt && ['PORTRAIT', 'ACTION', 'PAIR', 'GROUP'].includes(shotType)) {
-    parts.push(`Character: ${imageGenSettings.charImagePrompt}.`)
+    parts.push(window.WanWanPrompts.render("wechat.buildEnhancedImagePrompt.0b872ad08", [imageGenSettings.charImagePrompt]))
   }
   if (cleanDesc) parts.push(cleanDesc)
   return parts.join(' ').trim()
@@ -4892,7 +4908,8 @@ async function loadChatMessages(page, chatId, options = {}) {
   const mcpTraces = await getMcpToolTracesForConversation('chat', chatId, traceLowerBound)
   const charName = getWechatDisplayName(char)
   // 首屏消息已经携带 stickerImage；这里不读取整套挂载表情图片，避免大表情库拖慢聊天打开。
-  const stickerMap = {}
+  const needsStickerMap = msgs.some(m => !m.stickerImage && parseMsgType(m.content).type === 'sticker')
+  const stickerMap = needsStickerMap ? await getMountedStickerMap(chatId) : {}
   const visibleMsgs = msgs.filter(m => parseMsgType(m.content, charName).type !== 'status-update')
   const oldestVisible = visibleMsgs[0] || null
   const hasEarlier = oldestVisible ? await hasEarlierChatMessages(chatId, oldestVisible) : false
@@ -5514,7 +5531,21 @@ function bindMsgLongPress(container, charId) {
 // 按换行拆分用户输入：每一行 trim 后作为独立消息；空行丢弃
 function splitMessageLines(text) {
   if (!text) return []
-  return text.split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+  const result = [], lines = String(text).split(/\r?\n/)
+  let pending = ''
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line) continue
+    if (!pending && /^(?:\[|【).{1,80}引用/.test(line) && !/[\]】]$/.test(line)) { pending = line; continue }
+    if (pending) {
+      pending += '\n' + line
+      if (/[\]】]$/.test(line) && /并回复\s*[:：]/.test(pending)) { result.push(pending); pending = '' }
+      continue
+    }
+    result.push(line)
+  }
+  if (pending) result.push(pending)
+  return result
 }
 
 // 多行消息逐条出现的间隔
@@ -5557,8 +5588,35 @@ function createPrivateMessageOperationId(chatId, role) {
   return `local-${role || 'message'}-${_wechatUid || 'anonymous'}-${chatId}-${random}`
 }
 
+async function hydrateMessageSticker(row, mountId) {
+  if (!row || row.stickerImage) return row
+  const parsed = parseMsgType(row.content)
+  if (parsed.type !== 'sticker') return row
+  const map = await getMountedStickerMap(mountId)
+  const name = String(parsed.data.name || '').trim()
+  const exact = Object.keys(map).find(key => key === name) || Object.keys(map).find(key => key.normalize('NFKC').trim() === name.normalize('NFKC').trim())
+  if (exact) row.stickerImage = map[exact]
+  return row
+}
+
+async function finalizeCharacterTakeout(row) {
+  if (!['assistant','char'].includes(row.role) || !row.chatId) return
+  const parsed = parseMsgType(row.content)
+  if (parsed.type !== 'yum-deal' || parsed.data.origin !== 'char-text' || parsed.data.dealType !== 'gift') return
+  const deal = parsed.data
+  if (typeof yhFinalizeOrderTimeline === 'function') {
+    const order = yhFinalizeOrderTimeline({ etaMinutes: 30 }, row.createdAt || Date.now(), 30)
+    deal.orderId = order.id
+    for (const key of ['createdAt','etaMinutes','estDeliverAt','state1EndAt','actualDeliverAt']) deal[key] = order[key]
+  }
+  row.content = window.buildYumDealMessageContent(deal)
+  row.cardStatus = 'gift'
+}
+
 async function addPrivateMessageIdempotently(message) {
   const row = { ...(message || {}) }
+  await hydrateMessageSticker(row, row.chatId)
+  await finalizeCharacterTakeout(row)
   if (!row.clientMessageId) {
     row.clientMessageId = createPrivateMessageOperationId(row.chatId, row.role)
   }
@@ -6031,10 +6089,10 @@ async function generateCharThought(char, userText, templateConfig) {
   const cfg = normalizeThoughtTemplateConfig(templateConfig)
   const charName = char?.nick || char?.name || '角色'
   const templateRule = cfg.enabled && cfg.promptSuffix
-    ? `\n\n本次必须按以下要求生成心声原文：${cfg.promptSuffix}\n这些内容只输出为心声本身，不要写进聊天回复。`
+    ? window.WanWanPrompts.render("wechat.generateCharThought.ef38634e4", [cfg.promptSuffix])
     : ''
-  const prompt = `你扮演${charName}，性格：${char.description?.slice(0, 200) || ''}。刚才用户回复了"${userText}"，请用第一人称写出${charName}此刻的内心独白（${_WECHAT_THOUGHT_MAX}字以内）。直接给出独白本身，不要加引号、不要加旁白说明。${templateRule}`
-  const result = await window.callAI([{ role: 'user', content: prompt }])
+  const prompt = window.WanWanPrompts.render("wechat.generateCharThought.ddf1704e9", [charName, char.description?.slice(0, 200) || '', userText, charName, _WECHAT_THOUGHT_MAX, templateRule])
+  const result = await window.callAI([{ role: 'user', content: prompt }], window.WanWanPrompts.options("wechat.generateCharThought", {}))
   // 去掉 AI 可能附加的引号 / 前缀
   return (result || '').trim().replace(/^["'""''「」]+|["'""''「」]+$/g, '').trim()
 }
@@ -6049,7 +6107,7 @@ const _WECHAT_AI_JSON_SCHEMA = {
     properties: {
       chain: { type: 'string', description: '思维链；若无则空字符串' },
       thought: { type: 'string', description: '短内心独白' },
-      status: { type: 'string', description: '更新当前状态，必须简洁，约1-15字' },
+      status: { type: 'string', description: window.WanWanPrompts.render("wechat.补充规则.67b60274e", []) },
       reply: { type: 'string', description: '发给用户的内容，多行用换行' }
     },
     required: ['reply'],
@@ -6331,7 +6389,7 @@ async function buildWechatAvatarContext(charId) {
   const char = await window.getCharacter(charId)
   const charName = char?.nick || char?.name || '当前角色'
   const userName = _wechatUser?.name || '当前用户'
-  const text = `系统提示：当前【${userName}】为角色【${charName}】设置了本地显示头像。图片代表了【${charName}】在微信软件中显示的头像，不代表对方用户【${userName}】的头像、外貌或身份。角色可以知道自己的微信显示头像被对方更换。不要提及或猜测任何微信备注。`
+  const text = window.WanWanPrompts.render("wechat.buildWechatAvatarContext.2ebb8a62e", [userName, charName, charName, userName])
   return {
     imageMessage: {
       role: 'user',
@@ -6342,7 +6400,7 @@ async function buildWechatAvatarContext(charId) {
     },
     textMessage: {
       role: 'user',
-      content: `系统提示：当前【${userName}】为角色【${charName}】设置了本地显示头像，但当前接口无法读取图片内容。该头像代表了【${charName}】在微信软件中显示的头像，不代表对方用户【${userName}】的头像、外貌或身份。角色可以知道自己的微信显示头像被对方更换。不要提及或猜测任何微信备注。`
+      content: window.WanWanPrompts.render("wechat.buildWechatAvatarContext.ca4e69760", [userName, charName, charName, userName])
     }
   }
 }
@@ -6833,7 +6891,7 @@ function buildCallRecordContextFromRecord(record, fallbackRole = 'user') {
     : (fallbackRole === 'assistant' ? 'char' : 'user')
   const initiatorLabel = initiator === 'char' ? '角色' : userName
   const receiverLabel = initiator === 'char' ? userName : '角色'
-  return `（${initiatorLabel}发起了${callType}，${receiverLabel}接听了${callType === '视频通话' ? '视频电话' : '电话'}，通话时长${duration}，${callType}已结束。）`
+  return window.WanWanPrompts.render("wechat.buildCallRecordContextFromRecord.ad4cbf342", [initiatorLabel, callType, receiverLabel, callType === '视频通话' ? '视频电话' : '电话', duration, callType])
 }
 
 function findCallMessageRecord(message, callMap) {
@@ -7185,8 +7243,8 @@ function getWechatOfflineSessionKey(row) {
 
 function getWechatOfflineStartPrompt(session) {
   return session.ended
-    ? '（之后你们进入线下见面模式。本段线下见面已经结束，以下是当时发生的线下记录。）'
-    : '（之后你们进入线下见面模式。注意：本段线下模式尚未结束，请分辨你们是否仍处于面对面状态，并基于上下文逻辑回复。）'
+    ? window.WanWanPrompts.render("wechat.getWechatOfflineStartPrompt.91cf655d7", [])
+    : window.WanWanPrompts.render("wechat.getWechatOfflineStartPrompt.a7c18cd45", [])
 }
 
 function hasLaterOnlineEvent(events, currentIndex, afterTime) {
@@ -7212,7 +7270,7 @@ async function callWechatAIWithFallback(primaryMessages, fallbackMessages, opts,
   let lastError = null
   for (const attempt of attempts) {
     try {
-      const raw = await window.callAI(attempt.messages, attempt.opts)
+      const raw = await window.callAI(attempt.messages, window.WanWanPrompts.options("wechat.callWechatAIWithFallback", (attempt.opts)))
       const normalized = parseWechatAIResponse(raw)
       return { normalized, messages: attempt.messages, opts: attempt.opts }
     } catch (e) {
@@ -7225,60 +7283,7 @@ async function callWechatAIWithFallback(primaryMessages, fallbackMessages, opts,
 // ===== MCP 跑腿助理 =====
 // 角色请求全程不带 tools，也不带任何 tool 协议消息。工具由跑腿助理在前置阶段跑完，
 // 结果由它自己写成一段中文汇报，再作为纯文本纸条交给角色。
-const WECHAT_MCP_ROUTER_SYSTEM = `你是一个后台跑腿助理，正在为一位「正在扮演角色和用户聊天」的同事工作。
-用户看不到你，你的输出永远不会直接显示给用户。
-
-# 你能用的工具
-{{TOOL_LIST}}
-
-# 任务一：判断要不要调用工具
-
-读最后几条对话，判断用户这句话是否需要外部信息，或者需要你去执行某个操作。
-
-该调用的情况：
-- 时效性信息：新闻、价格、天气、排期、最新动态，以及带「现在 / 最近 / 今天」的问题
-- 需要核实的具体事实：某个人、某件事、某个产品、某个地点、某个专有名词
-- 用户给了网页链接或文档，希望你去读
-- 用户明确要求执行操作：下单、预订、发送、创建、查询、搜索
-- 出现明确动词：查一下、搜、找、看看、帮我了解、帮我订、帮我发
-
-不该调用的情况：
-- 闲聊、情绪陪伴、撒娇、开玩笑
-- 问观点、问感受、要建议
-- 创作、续写、角色扮演互动
-- 你有把握的常识
-- 之前的工具结果已经覆盖了用户的需求
-
-拿不准时倾向于调用——工具就是拿来用的。
-完全不需要工具时，只输出 NO_TOOLS 这一个词，然后结束。
-
-# 任务二：汇报
-
-所有需要的工具都调完之后，写一段中文汇报，交给正在扮演角色的同事看。
-
-汇报要求：
-- 说清楚两件事：你做了什么、结果是什么
-- 用日常中文，像同事之间口头交代事情
-- 只陈述事实。不要替角色组织语气，不要写任何面向用户的对白，不要用感叹号
-- 简短，通常两三句话。信息确实很多时（比如搜到多条结果）分行列要点，但保持精炼
-- 没查到、查错了、操作失败，就直说没成，不要编造，不要粉饰
-- 如果结果里有需要用户自己点开的付款、确认或授权入口，写明「有一个入口需要用户自己点开」
-
-绝对不能出现在汇报里的东西：
-- 工具名、函数名，以及任何 wanwan_mcp_ 开头的字符串
-- 参数、JSON、字段名、大括号、引号包裹的键值对
-- 接口、API、MCP、服务器、请求、调用、报错码这类技术词
-- 「我调用了××工具」「根据返回结果」这类说法
-
-对照：
-✗ 我调用了 wanwan_mcp_2 查询天气，返回 {"temp":28,"desc":"多云"}
-✓ 我查了上海今天的天气，28 度，多云。
-
-✗ get_weather 接口报错 timeout，调用失败
-✓ 天气没查到，那边一直没反应。
-
-✗ 搜索接口返回了 3 条结果，results 数组第一项 title 是……
-✓ 搜到三条，最相关的一条是：……`
+const WECHAT_MCP_ROUTER_SYSTEM = window.WanWanPrompts.render("wechat.全局规则.e1c2ca98c", [])
 
 const WECHAT_MCP_REPORT_HEADER = `[以下是系统在后台查到的信息，交给你参考。
 这不是聊天内容，也不是用户说的话，用户看不到这段文字。
@@ -7453,7 +7458,7 @@ async function runWechatMcpPrefetch(allowMcp, traceContext = {}, history = []) {
     const turnId = `mcp-turn-${Date.now()}-${Math.random().toString(36).slice(2)}`
     const toolSession = { cache: {}, records: [], contextMessages: [], used: false }
 
-    const raw = await window.callMcpAI(routingMessages, {
+    const raw = await window.callMcpAI(routingMessages, window.WanWanPrompts.options("wechat.runWechatMcpPrefetch", ({
       system: WECHAT_MCP_ROUTER_SYSTEM.replace('{{TOOL_LIST}}', buildWechatMcpToolList(binding.tools)),
       tools: binding.tools,
       maxToolCalls: WECHAT_MCP_MAX_TOOL_CALLS,
@@ -7468,7 +7473,7 @@ async function runWechatMcpPrefetch(allowMcp, traceContext = {}, history = []) {
         })
         return { modelContent: detailed.modelContent, traceData: detailed }
       }
-    })
+    })))
 
     const close = async () => {
       await window.WanWanMCP.closeExecutionRun?.(executionRun)
@@ -7612,11 +7617,11 @@ async function generateAIReply(chatId, charId, options = {}) {
   const fallbackMessages = appendWechatTransientTimeNotice(
     appendWechatTransientTimeNotice(baseFallbackMessages, timeNotice), mcp.noticeText)
   const hasFallbackMessages = !!avatarCtx || !!context.hasVisualContent
-  const opts = {
+  const opts = window.WanWanPrompts.options('wechat.generateAIReply', {
     system,
     responseFormat: 'json_object',
     temperature: await window.getAITemperaturePreset('wechatPrivate')
-  }
+  })
   try {
     let { normalized, messages: activeMessages, opts: activeOpts } = await callWechatAIWithFallback(messages, fallbackMessages, opts, hasFallbackMessages)
     if (!isBilingualReplyCompliant(normalized.reply, bilingualSettings, charName)) {
@@ -7624,7 +7629,7 @@ async function generateAIReply(chatId, charId, options = {}) {
         role: 'user',
         content: buildBilingualCorrectionPrompt(bilingualSettings)
       })
-      const raw = await window.callAI(retryMessages, activeOpts)
+      const raw = await window.callAI(retryMessages, window.WanWanPrompts.options("wechat.generateAIReply", (activeOpts)))
       normalized = parseWechatAIResponse(raw)
     }
     return normalized
@@ -7759,14 +7764,13 @@ async function buildChatSystem(char, loreCtx, charName, userName, userNick, stic
       const musicCtx = await window.getMusicTogetherContext()
       if (musicCtx && String(musicCtx.friendId) === String(char?.id)) {
         const songLabel = musicCtx.songName + (musicCtx.artist ? ' - ' + musicCtx.artist : '')
-        part2 += '\n[当前和用户在网易云音乐一起听歌，当前歌曲：' + songLabel +
-          (musicCtx.lyricLine ? '，当前歌词：' + musicCtx.lyricLine : '') + ']'
+        part2 += window.WanWanPrompts.render("wechat.buildChatSystem.cce965828", [songLabel, musicCtx.lyricLine ? '，当前歌词：' + musicCtx.lyricLine : ''])
       }
     }
   } catch (e) {}
 
   const loreAfterBlock = loreSeg.after
-    ? `# 【补充世界观设定】\n${loreSeg.after}\n\n---\n\n`
+    ? window.WanWanPrompts.render("wechat.buildChatSystem.f9cf320a1", [loreSeg.after])
     : ''
   let system = buildSystemPart5(charName, userName, thoughtTemplate) +
     buildSystemBilingualPart(bilingualSettings) +
@@ -7782,7 +7786,7 @@ async function buildChatSystem(char, loreCtx, charName, userName, userNick, stic
   if (idleContext?.enabled && idleContext.mode === 'auto_reply') system += '\n\n' + buildSystemAutoReplyPart(idleContext)
   const requirement = String(replyRequirement || '').trim()
   if (requirement) {
-    system += `\n\n# 【回复要求】\n这是用户对本次回复提出的要求。\n回复要求：${requirement}`
+    system += window.WanWanPrompts.render("wechat.buildChatSystem.d3b5c10e3", [requirement])
   }
   return system
 }
@@ -7790,28 +7794,13 @@ async function buildChatSystem(char, loreCtx, charName, userName, userNick, stic
 function buildSystemFollowupPart(followupContext) {
   const idleMinutes = Math.max(1, parseInt(followupContext?.idleMinutes, 10) || 1)
   const elapsedText = idleMinutes >= 20 ? '一段时间' : `${idleMinutes} 分钟`
-  return `# 【继续追发规则】
-
-当前情景：你上一条微信已经发出${elapsedText}，对方一直没有回复，也没有发来任何新消息，对话此刻停在你这一边。
-
-你这次**必须继续主动发送至少一条微信消息**，像真实聊天里对方暂时没回时的顺势追发。追发有两种自然走向，自行选择更符合当下状态的一种：
-- **承接上文**：顺着你上一条消息或当前话题继续说，可以是平静补充、关心追问、提醒催促、试探确认、撒娇埋怨或轻微质问；
-- **另起话头**：如果上一个话题已经说完或不适合继续追，也可以像真人一样自然聊起别的，分享刚发生的事、突然想到的东西、你人设生活里的日常等。
-
-无论哪种走向，语气和强弱都由你们的关系亲密度、当前情绪张力、角色性格和当前时间点决定，必须符合人设与上下文。
-你可以自然流露“怎么还没回我”之类的情绪（如果符合关系与性格）。不要机械重复你上一条消息的原文，也不要原地打转；无论是承接旧话题还是换新话题，都要让聊天实际往前推进。不要在消息里解释这条消息为什么会出现。`
+  return window.WanWanPrompts.render("wechat.buildSystemFollowupPart.dad22136a", [elapsedText])
 }
 
 function buildSystemAutoReplyPart(idleContext) {
   const idleMinutes = Math.max(1, parseInt(idleContext?.idleMinutes, 10) || 1)
   const elapsedText = idleMinutes >= 20 ? '一段时间' : `${idleMinutes} 分钟`
-  return `# 【自动回复规则】
-
-当前情景：对方的最后一条微信已经发来${elapsedText}，你一直没有回复，对话停在对方那边等你开口。
-
-你这次**必须回复至少一条微信消息**，像真人隔了一会儿才看到消息或忙完才回的样子，并且**必须先回应对方最后一条消息的实际内容**（有问必答、有分享必有反应），之后可顺势延展或抛新话头。
-间隔不久或你人设本就回复慢，可直接接话；间隔较久可先自然带一句刚才在做什么再接话，理由要具体、每次不同、符合当前时段与人设作息，禁用“刚没看到手机”式模板句。
-判断对方消息的时间逻辑时应以其发送时间为准，不要用当前时间指摘它有“时间矛盾”。注意：不要在消息里解释这条消息为什么会出现。`
+  return window.WanWanPrompts.render("wechat.buildSystemAutoReplyPart.f9726b729", [elapsedText])
 }
 
 function buildSystemBilingualPart(bilingualSettings) {
@@ -7820,15 +7809,7 @@ function buildSystemBilingualPart(bilingualSettings) {
   const sourceLabel = getChatBilingualLangLabel(cfg.sourceLang)
   const targetLabel = getChatBilingualLangLabel(cfg.targetLang)
   const example = `[${getChatBilingualExample(cfg.sourceLang)}「${targetLabel}翻译」]`
-  return `# 【双语模式特别指令（最高优先级）】
-
-当前聊天已启用双语模式。原文语言：${sourceLabel}；翻译语言：${targetLabel}。当角色使用外语回复时，**必须且只能使用${sourceLabel}**，禁止使用${sourceLabel}以外的其他外语（例如英语）——除非角色人设另有明确母语设定。每条${sourceLabel}消息都必须在同一条消息内附带${targetLabel}翻译。
-
-普通外语文字消息必须严格使用格式：[{${sourceLabel}原文}「{${targetLabel}翻译}」]，例如：${example}。${targetLabel}翻译文本视为系统自翻译，不视为角色的原话；不要解释“设置”或询问“什么设置”。当你的角色想要说中文时，需要根据你的角色设定自行判断对于中文的熟悉程度来造句，并使用普通消息的标准格式：[{中文消息内容}]，此时不需要附带翻译。**外语语音消息**在双语模式下也须使用相同格式：[{${sourceLabel}原文}「{${targetLabel}翻译}」]，例如：${example}。中文语音消息可使用普通语音格式，不需要附带翻译。这条规则的优先级非常高，请务必遵守。
-
----
-
-`
+  return window.WanWanPrompts.render("wechat.buildSystemBilingualPart.9e554bcc9", [sourceLabel, targetLabel, sourceLabel, sourceLabel, sourceLabel, targetLabel, sourceLabel, targetLabel, example, targetLabel, sourceLabel, targetLabel, example])
 }
 
 function isBilingualReplyCompliant(reply, bilingualSettings, charName) {
@@ -7861,7 +7842,7 @@ function buildBilingualCorrectionPrompt(bilingualSettings) {
   const cfg = normalizeChatBilingualSettings(bilingualSettings)
   const sourceLabel = getChatBilingualLangLabel(cfg.sourceLang)
   const targetLabel = getChatBilingualLangLabel(cfg.targetLang)
-  return `系统纠错：上一条 reply 没有遵守当前聊天已开启的双语模式。请重新输出同一个 JSON 对象结构。reply 字段中，外语普通文字消息和外语语音消息必须使用 [{${sourceLabel}原文}「{${targetLabel}翻译}」] 格式；如果角色按人设主动说中文，可以使用纯中文普通消息或中文语音消息，不需要翻译。禁止解释规则。`
+  return window.WanWanPrompts.render("wechat.buildBilingualCorrectionPrompt.9702d8c2b", [sourceLabel, targetLabel])
 }
 
 function buildSystemMemoryPart(memoryCtx) {
@@ -7880,25 +7861,9 @@ ${memoryCtx}
 function buildSystemPart5(charName, userName, thoughtTemplate) {
   const thoughtRule = normalizeThoughtTemplateConfig(thoughtTemplate)
   const thoughtLine = thoughtRule.enabled && thoughtRule.promptSuffix.trim()
-    ? `- "thought"：${charName}此刻真实的心声原文，至少10个字，${_WECHAT_THOUGHT_MAX}字以内。**每轮必须更新，不得为空。**必须额外遵守这个心声格式要求：${thoughtRule.promptSuffix.trim()}。这个格式只允许写进 JSON 顶层字段 "thought"，**禁止写进 reply**。若 chain 非空，thought 须与 chain 一致、更短。`
-    : `- "thought"：${charName}此刻真实的内心独白，第一人称，至少10个字，${_WECHAT_THOUGHT_MAX}字以内。**每轮必须更新，不得为空。**若 chain 非空，thought 须与 chain 一致、更短。`
-  return `# 【输出格式（最高优先级，全程生效）】
-
-⚠️ **每次回复必须且只能输出一个合法 JSON 对象，JSON 外禁止任何文字（含 markdown 代码块）。**禁止依赖第二轮回复补全字段；所有字段必须在当前这一条输出中一次性给齐。
-
-字段说明（四个键都必须出现；无思维链时 chain 用空字符串 ""）：
-- "chain"：内心推演与思维链，可较长。**若写 chain，须先在其中推理，再凝练出 thought。**不需要长推理时填 "" 即可。
-${thoughtLine}
-- "status"：${charName}当前状态，**每轮必须更新**，必须简洁，1-15字左右，例如 "正在聊天"、"刚洗完澡"、"有点困"。不要写长句、不要加标点、不要写成对话。
-- "reply"：实际发给${userName}的内容，多条消息之间用 \\n 隔开。**必须至少包含一条可见聊天消息，不得只写状态更新格式。**
-
-✅ 正确：{"chain":"用户语气冲，可能累了…先稳住。","thought":"他今天心情不好，我得小心点…","status":"正在聊天","reply":"怎么了？\\n发生什么事了吗"}
-✅ 无长推理：{"chain":"","thought":"他今天心情不好，我得小心点…","status":"有点担心","reply":"怎么了？\\n发生什么事了吗"}
-❌ 错误（禁止）：好的，我来回复：{"thought":"…","reply":"…"}
-
----
-
-`
+    ? window.WanWanPrompts.render("wechat.buildSystemPart5.78dd27587", [charName, _WECHAT_THOUGHT_MAX, thoughtRule.promptSuffix.trim()])
+    : window.WanWanPrompts.render("wechat.buildSystemPart5.dce05c6f6", [charName, _WECHAT_THOUGHT_MAX])
+  return window.WanWanPrompts.render("wechat.buildSystemPart5.76a42d11c", [thoughtLine, charName, userName])
 }
 
 // 构建当前私聊双方关系：只读取当前 AI 角色对登录用户的关系，不读取反向关系。
@@ -7912,76 +7877,25 @@ function buildCurrentRelationText(char) {
 
 // 系统提示词Part1：角色设定（loreBefore 为「前」时机的世界书，注入在核心人设之前）
 function buildSystemPart1(char, charName, loreCtx, loreBefore = '') {
-  const loreBeforeBlock = loreBefore ? `## 前置世界观设定\n${loreBefore}\n\n` : ''
-  return `# 【最高指令：沉浸式角色扮演】
-你正在进行一场线上微信聊天。每次回复像真实发微信一样：根据情绪和话题自由决定发几条、每条多短，拒绝千篇一律的回复节奏。只能发文字，**禁止任何"*动作*"或旁白叙述**。
-**你当前正在微信聊天中回复，不是在输出线下模式内容。**线下见面记录只用于理解已经发生或可能仍在延续的关系状态；最终 reply 必须是微信气泡里的消息。
-如果上下文提示“线下见面已经结束”，只能把它当作过去发生过的事参考。如果提示“线下模式尚未结束”，你需要结合后续微信消息判断双方是否仍处于面对面状态，但回复仍然必须发生在微信聊天里。
-禁止在 reply 中直接写线下动作、旁白、场景描写，或说“我现在在线下模式”“根据线下记录”等元说明。
-**你的真实身份是：${charName}**
-
----
-
-# 【Part 1: 你是谁】
-
-${loreBeforeBlock}## 核心人设
-${char.gender ? `- **性别**：${char.gender}` : ''}
-${char.role ? `- **身份**：${char.role}` : ''}
-
-${char.description || '(未设定，以普通人逻辑行事)'}
-
-## 世界观设定
-${loreCtx || '(无特殊世界观，以现实生活逻辑为准)'}
-
----
-
-`
+  const loreBeforeBlock = loreBefore ? window.WanWanPrompts.render("wechat.buildSystemPart1.2e18de5c3", [loreBefore]) : ''
+  return window.WanWanPrompts.render("wechat.buildSystemPart1.21777d448", [charName, loreBeforeBlock, char.gender ? `- **性别**：${char.gender}` : '', char.role ? `- **身份**：${char.role}` : '', char.description || '(未设定，以普通人逻辑行事)', loreCtx || '(无特殊世界观，以现实生活逻辑为准)'])
 }
 
 // 系统提示词Part2：当前情景
 function buildSystemPart2(timeStr, tod, userName, userNick, currentRelationText, userDesc, timeAwarenessEnabled) {
-  const nickLine = userNick ? `- **对方微信昵称**：${userNick}\n` : ''
+  const nickLine = userNick ? window.WanWanPrompts.render("wechat.buildSystemPart2.fa53c26aa", [userNick]) : ''
   const timeBlock = timeAwarenessEnabled
-    ? `【Priority: Absolute Time Awareness】
-当前真实时间：${timeStr}，时段：${tod}。
-你需要同时理解当前时间与聊天记录中的历史时间锚点。判断用户是在描述当下、回忆过去还是安排未来时，应结合消息发送时间、上下文语义与当前时间，不要只凭某个时间词武断判断。
-执行规则：
-1. 你的状态、行为、可能正在做的事情，必须与当前时间段（${tod}）逻辑一致。
-2. 只有在用户明确描述“此刻”且内容与当前时间确实冲突时，才可按人设自然表现疑惑或询问；若是在回忆、转述、回复旧话题或讨论计划，不要误判为时间矛盾。`
-    : `- **当前时间**：${timeStr}（${tod}）`
-  return `# 【Part 2: 当前情景】
-
-${timeBlock}
-- **对方姓名**：${userName}
-${nickLine}- **与对方的关系**：${currentRelationText}
-- **对方背景**：${userDesc}
-
----
-
-`
+    ? window.WanWanPrompts.render("wechat.buildSystemPart2.9bd05a23f", [timeStr, tod, tod])
+    : window.WanWanPrompts.render("wechat.buildSystemPart2.b65ef15bd", [timeStr, tod])
+  return window.WanWanPrompts.render("wechat.buildSystemPart2.0257bdb66", [timeBlock, userName, nickLine, currentRelationText, userDesc])
 }
 
 function buildSystemPart2Tz(charName, charLoc, charTime, charTod, userName, userNick, userLoc, userTime, userTod, currentRelationText, userDesc, timeAwarenessEnabled) {
-  const nickLine = userNick ? `- **对方微信昵称**：${userNick}\n` : ''
+  const nickLine = userNick ? window.WanWanPrompts.render("wechat.buildSystemPart2Tz.fa53c26aa", [userNick]) : ''
   const timeBlock = timeAwarenessEnabled
-    ? `【Priority: Absolute Time Awareness】
-当前真实时间：${charName}所在地为${charTime}（${charTod}）；${userName}所在地为${userTime}（${userTod}）。
-你需要同时理解双方当前时间与聊天记录中的历史时间锚点。判断用户是在描述当下、回忆过去还是安排未来时，应结合消息发送时间、上下文语义与当前时间，不要只凭某个时间词武断判断。
-执行规则：
-1. ${charName}的状态、行为、可能正在做的事情，必须与${charTod}逻辑一致；判断与${userName}相关的时间逻辑（例如对方是否方便接听、是否在睡觉）时，须以${userTod}为准。
-2. 若双方日期或时段存在显著差异，应在确实影响当前话题时自然体现这种差异，不要机械报时。
-3. 只有在用户明确描述“此刻”且内容与其所在地当前时间确实冲突时，才可按人设自然表现疑惑或询问；若是在回忆、转述、回复旧话题或讨论计划，不要误判为时间矛盾。`
-    : `- **当前时间**：此时${charName}处于${charLoc}，当前时间为${charTime}（${charTod}）；${userName}处于${userLoc}，当前时间为${userTime}（${userTod}）`
-  return `# 【Part 2: 当前情景】
-
-${timeBlock}
-- **对方姓名**：${userName}
-${nickLine}- **与对方的关系**：${currentRelationText}
-- **对方背景**：${userDesc}
-
----
-
-`
+    ? window.WanWanPrompts.render("wechat.buildSystemPart2Tz.37b7c7379", [charName, charTime, charTod, userName, userTime, userTod, charName, charTod, userName, userTod])
+    : window.WanWanPrompts.render("wechat.buildSystemPart2Tz.249141adf", [charName, charLoc, charTime, charTod, userName, userLoc, userTime, userTod])
+  return window.WanWanPrompts.render("wechat.buildSystemPart2Tz.0257bdb66", [timeBlock, userName, nickLine, currentRelationText, userDesc])
 }
 
 
@@ -7990,99 +7904,23 @@ function buildSystemPart3(charName, userName, stickerNames, imageGenEnabled) {
   // 表情包能力：仅当本会话挂载了表情包分组、且分组下有表情时才开放
   const hasStickers = Array.isArray(stickerNames) && stickerNames.length > 0
   const stickerCapability = hasStickers
-    ? `**表情包**（**仅可从下列已知名称中挑选发送，禁止虚构、禁止改写名称**）：${stickerNames.join(' ｜ ')}
-格式：\`[${charName}的表情包：{从上述名单中精确复制一个名称}]\``
-    : `**表情包**：当前会话未挂载任何表情包分组，**禁止使用任何表情包格式**。`
+    ? window.WanWanPrompts.render("wechat.buildSystemPart3.795cbe484", [stickerNames.join(' ｜ '), charName])
+    : window.WanWanPrompts.render("wechat.buildSystemPart3.1138fcb61", [])
   const photoLine = imageGenEnabled
-    ? `**照片** \`[${charName}发来的照片：{English image prompt, 以 [SHOT:XXX] 开头，详见末尾 IMAGE PROMPT GUIDE}]\``
-    : `**照片** \`[${charName}发来的照片：{画面描述}]\``
+    ? window.WanWanPrompts.render("wechat.buildSystemPart3.21ff2123b", [charName])
+    : window.WanWanPrompts.render("wechat.buildSystemPart3.c9e0cd1ac", [charName])
 
-  return `# 【Part 3: 消息能力】
-
-> 普通聊天直接回复文字。
-> **想连发多条短消息时，用换行符 \`\\n\` 把它们隔开**——每一行会被渲染成一条独立的微信气泡，就像真人连发好几条消息那样。
-> 想发特殊消息（语音 / 照片 / 转账 / 表情包 / 位置 / 引用 / 撤回等）时，直接输出下面的括号格式，**且每条特殊消息必须独占一行**（前后用换行隔开），否则不会被识别。
-
-**语音消息** \`[${charName}的语音：{语音文字}]\`
-${photoLine}
-${stickerCapability}
-**转账** \`[${charName}的转账：{金额}元；备注：{备注文字}]\`
-**位置** \`[${charName}的位置：{地点名称}{可选详址}；距你约{距离}{单位}]\`
-**引用回复** \`[${charName}引用"${userName}：原句"并回复：{你的回复}]\`
-**撤回消息** \`[${charName}撤回了一条消息：{被撤回内容}]\`
-**拍一拍** \`[${charName}拍了拍${userName}{可选后缀}]\`，例如 \`[${charName}拍了拍${userName}的肩膀]\`
-**接受/退回转账** \`[${charName}接收${userName}的转账]\` 或 \`[${charName}退回${userName}的转账]\`
-
-**淘宝代付**（请对方帮你付款，金额自由填写） \`[${charName}的淘宝代付：{商品名称}；¥{金额}]\`
-**淘宝赠送**（你已付款，把礼物送给对方） \`[${charName}的淘宝赠送：{商品名称}；¥{金额}]\`
-**回应对方的淘宝代付**：帮TA付款 \`[${charName}帮${userName}付了淘宝代付]\`，或拒绝 \`[${charName}拒绝了${userName}的淘宝代付]\`
-**回应对方的淘宝赠送**：收下 \`[${charName}接收了${userName}的淘宝礼物]\`，或退回 \`[${charName}退回了${userName}的淘宝礼物]\`
-
-**回应对方的外卖代付**（YumYum，付款后才会生成订单号与送达时间）：帮TA付款 \`[${charName}帮${userName}付了外卖代付]\`，或拒绝 \`[${charName}拒绝了${userName}的外卖代付]\`
-**回应对方的外卖赠送/请客**（YumYum）：收下 \`[${charName}收下了${userName}的外卖]\`，或退回 \`[${charName}退回了${userName}的外卖]\`
-
-**发起语音通话** \`[${charName}发起语音通话]\`
-**发起视频通话** \`[${charName}发起视频通话]\`
-
-状态不要写进 reply；请使用 JSON 顶层字段 "status" 每轮更新当前状态。
-
----
-
-`
+  return window.WanWanPrompts.render("wechat.buildSystemPart3.13880262d", [charName, photoLine, stickerCapability, charName, charName, charName, userName, charName, charName, userName, charName, userName, charName, userName, charName, userName, charName, charName, charName, userName, charName, userName, charName, userName, charName, userName, charName, charName, charName, userName, charName, userName, charName, userName, charName, userName, charName, charName])
 }
 
 function buildImagePromptGuide(charName, userName) {
-  return `# IMAGE PROMPT GUIDE
-
-照片描述以 [SHOT:XXX] 开头，XXX 选自：
-  PORTRAIT - 人物特写/自拍（1人，近景）
-  ACTION - 人物动作/全身（1人，中远景）
-  PAIR - 两人同框
-  GROUP - 三人及以上
-  STILL - 物品/静物（无人）
-  VISTA - 风景（无人）
-
-规则：
-1. 全部用 English
-2. 一句流畅英文，40-80 words
-3. 顺序：镜头 -> 主体 -> 姿势/动作 -> 表情 -> 环境 -> 光线 -> 氛围
-4. 具体生动，禁止空洞：
-   bad: "a pretty girl, nice lighting"
-   good: "she leans against a doorframe, golden afternoon light, dust motes drifting"
-5. 按类型开头：
-   PORTRAIT -> "A close-up portrait of..."
-   ACTION -> "A full-body shot of..."
-   PAIR -> "A wide shot of two people..."
-   GROUP -> "A wide environmental shot of several people..."
-   STILL -> "A still life of..."
-   VISTA -> "A landscape view of..."
-
-示例：
-  [${charName}发来的照片：[SHOT:PORTRAIT] A soft close-up selfie, gentle smile at the camera, warm cafe lighting, shallow bokeh, cozy afternoon.]
-  [${charName}发来的照片：[SHOT:ACTION] A cinematic side shot walking along a quiet shore, hair lifted by sea breeze, golden-hour rim light, serene.]
-  [${charName}发来的照片：[SHOT:STILL] A top-down close-up of a strawberry cake on a white plate, pastel kitchen, soft window light, no people in frame.]
-  [${charName}发来的照片：[SHOT:PAIR] A medium shot of ${charName} and ${userName} side by side, autumn park, warm glow, candid smiles.]
-  [${charName}发来的照片：[SHOT:GROUP] A wide shot of several friends gathered around a hotpot table, steam rising, warm restaurant lighting, lively.]
-  [${charName}发来的照片：[SHOT:VISTA] A wide view of a rain-soaked city skyline at dusk, neon reflections on wet pavement, moody blue-orange gradient sky.]
-`
+  return window.WanWanPrompts.render("wechat.buildImagePromptGuide.61b23a4ca", [charName, charName, charName, charName, charName, userName, charName, charName])
 }
 
 
 // 系统提示词Part4：行为守则
 function buildSystemPart4(charName, userName) {
-  return `# 【Part 4: 行为守则】
-
-1. 完全沉浸在你的人设里，像真人一样自然聊天。
-2. 你有自己的想法、情绪、生活节奏和底线。可以表达不同意见，也可以拒绝不合理请求。
-3. 根据你和${userName}的关系调整语气和态度，保持人物一致。
-4. 回复要像真人聊天一样，短、快、口语化、少用标点。只在必要时候进行长篇大论的回复。对话要自然、符合上下文逻辑，适当开启新话题。
-5. 不要只回答问题，要主动分享、追问、延展话题，让聊天自然继续。
-6. 如果对方发送了链接并要求你读取 URL，你可以尝试理解链接内容；如果无法联网访问、无法打开、或无法确认内容，必须自然地说打不开/加载不出来/看不到内容，禁止编造链接内容。
-7. 绝对不能透露自己是AI或模型。
-
----
-
-现在，作为 **${charName}**，给 **${userName}** 回复。`
+  return window.WanWanPrompts.render("wechat.buildSystemPart4.eb35d55c7", [userName, charName, userName])
 }
 
 
@@ -12243,7 +12081,7 @@ async function buildCharacterMomentPromptContext(char, friends, ownerUid = getCu
     })
   }
   const friendLines = friends.map(friend =>
-    `- ${friend.name}（与${charName}的关系：${friend.relation}）：${friend.desc}`
+    window.WanWanPrompts.render("wechat.buildCharacterMomentPromptContext.a18b17120", [friend.name, charName, friend.relation, friend.desc])
   )
   const virtualTime = await getMomentVirtualTimeText(char.id)
   return {
@@ -12271,54 +12109,12 @@ async function generateCharacterMomentDraft(char, friends, ownerUid = getCurrent
   } = await buildCharacterMomentPromptContext(char, friends, ownerUid)
   const ownerUser = ownerUid ? await db.characters.get(ownerUid) : _wechatUser
   const userName = ownerUser?.name || _wechatUser?.name || '用户'
-  const prompt = `你正在进行角色扮演。
-【当前时间】
-${virtualTime}
+  const prompt = window.WanWanPrompts.render("wechat.generateCharacterMomentDraft.3beef226b", [virtualTime, charName, displayName, String(profile?.bio || '').trim() || '(未设置)', char.description || '(未设定)', loreCtx || '(无特殊世界观，以现实生活逻辑为准)', recentMomentLines.length ? recentMomentLines.join('\n') : '- (暂无)', recentChatLines.length ? recentChatLines.join('\n') : '(暂无)', friendLines.length ? friendLines.join('\n') : '(暂无好友)', userName])
 
-【你的信息】
-名字：${charName}
-微信昵称：${displayName}
-个性签名：${String(profile?.bio || '').trim() || '(未设置)'}
-设定：
-${char.description || '(未设定)'}
-
-【世界观】
-${loreCtx || '(无特殊世界观，以现实生活逻辑为准)'}
-
-【最近发过的朋友圈「避免重复」】
-${recentMomentLines.length ? recentMomentLines.join('\n') : '- (暂无)'}
-
-【最近的聊天「仅做灵感参考，不必直接关联」】
-${recentChatLines.length ? recentChatLines.join('\n') : '(暂无)'}
-
-【以下好友会看到这条朋友圈，请同时为他们生成评论】（这些好友只来自当前角色档案里添加过关系的角色）
-${friendLines.length ? friendLines.join('\n') : '(暂无好友)'}
-
-请以角色的身份发一条朋友圈动态，并为看到这条朋友圈的好友生成评论。要求：
-1. 内容要符合角色的性格、身份和当前时间段
-2. 像真人发朋友圈一样自然，可以是日常分享、心情感悟、吐槽、晒图文案、段子等
-3. 长度适中，像真实朋友圈一样，一般1-3句话
-4. 大部分朋友圈应该是纯文字；只有在晒美食、风景、自拍等必须借助图片表达的场景，才配图
-5. 为角色好友列表中的每个人生成一条符合其性格的简短评论，2-25字，语气像真人随手评论；评论里的 name 必须与好友显示名完全一致
-6. 绝对禁止生成用户（${userName}）的评论，只生成角色好友的评论
-
-请严格以JSON格式返回，不要包含Markdown代码块标记：
-{
-  "content": "朋友圈文字",
-  "images": 0,
-  "image_desc": "",
-  "comments": [
-    { "name": "好友显示名", "text": "评论内容" }
-  ]
-}
-
-images 字段表示配图数量（0-9），0表示纯文字朋友圈。建议大多数情况设为0。
-image_desc 字段：当 images > 0 时，用一句话描述配图内容。`
-
-  const raw = await window.callAI([{ role: 'user', content: prompt }], {
+  const raw = await window.callAI([{ role: 'user', content: prompt }], window.WanWanPrompts.options("wechat.generateCharacterMomentDraft", ({
     temperature: await window.getAITemperaturePreset('wechatMoments'),
     responseFormat: 'json_object'
-  })
+  })))
   const parsed = extractAIJson(raw)
   if (!parsed || typeof parsed !== 'object') throw new Error('AI 返回格式异常')
   const content = convertBracketEmoji(parsed.content || parsed.text || '')
@@ -12507,13 +12303,13 @@ function buildMomentImagePromptParts(moment) {
     const desc = normalizeImageSupplementDesc(img.desc)
     if (isVisual) {
       imageContentParts.push({ type: 'image_url', image_url: { url: img.src } })
-      if (desc) imageContentParts.push({ type: 'text', text: `第 ${idx + 1} 张图片的图片重点补充：${desc}` })
+      if (desc) imageContentParts.push({ type: 'text', text: window.WanWanPrompts.render("wechat.buildMomentImagePromptParts.029d98b89", [idx + 1, desc]) })
     } else {
       imageTextParts.push(`第 ${idx + 1} 张图片：${desc || '(无描述)'}`)
     }
   })
   const imageText = images.length
-    ? `\n（附带${images.length}张图片，请查看后续 image_url。若某张图片后紧跟“第 N 张图片的图片重点补充”，该文字只补充紧前对应的 image_url。${imageTextParts.length ? '非真实图片说明：' + imageTextParts.join('；') : ''}）`
+    ? window.WanWanPrompts.render("wechat.buildMomentImagePromptParts.6ffbfe451", [images.length, imageTextParts.length ? '非真实图片说明：' + imageTextParts.join('；') : ''])
     : ''
   return { imageContentParts, imageText }
 }
@@ -12643,17 +12439,7 @@ async function generateUserMomentComments(momentId, moment, momentsPage, wechatP
   }
   if (!friendRows.length) return
 
-  const systemPrompt = `你正在进行角色扮演世界中的社交模拟。请严格基于以下角色设定和世界观来生成评论，确保每条评论都符合对应角色的人设。
-
-【朋友圈发布者信息】
-名字：${userName}
-微信网名：${userNick || userName}
-人设：${userDesc}
-
-【世界观】
-${loreCtx || '(无特殊世界观，以现实生活逻辑为准)'}
-
-只返回JSON对象，不要任何其他文字。`
+  const systemPrompt = window.WanWanPrompts.render("wechat.generateUserMomentComments.0125c0239", [userName, userNick || userName, userDesc, loreCtx || '(无特殊世界观，以现实生活逻辑为准)'])
 
   const { imageContentParts, imageText } = buildMomentImagePromptParts(moment)
   try {
@@ -12689,40 +12475,14 @@ ${loreCtx || '(无特殊世界观，以现实生活逻辑为准)'}
     ]
     const allowedNames = new Set(readingRows.map(row => getWechatDisplayName(row.friend)))
     const allowedNormalNames = new Set([...rowsWithoutComment, ...randomNormalRows].map(row => getWechatDisplayName(row.friend)))
-    const userPromptText = `${userName} 发了一条朋友圈：
-"${moment.content || '(无文字内容)'}"${imageText}
-
-【现有评论，必须先阅读】
-${existingCommentsText}
-
-以下是本次需要阅读的人设列表。不是每个人都需要输出评论；请只从这些人里面选择评论者：
-${readingRows.map(row => row.line).join('\n')}
-
-【允许回复的现有评论】
-${replyPairLines.length ? replyPairLines.join('\n') : '- (没有可回复的现有评论；只能生成普通评论)'}
-
-【允许普通评论的候选】
-${normalCandidateLines.length ? normalCandidateLines.join('\n') : '- (没有普通评论候选；只能按上面的允许回复生成 replyToName)'}
-
-要求：
-1. 每条评论简短自然（2-20字）
-2. 模拟真实微信朋友圈的随意评论语气，可以用语气词、缩写、表情符号，像日常刷朋友圈随手打的评论
-3. 必须符合每个角色的人设、性格特点和与${userName}的关系
-4. 可以选择普通评论，也可以回复现有评论；只有出现在【允许回复的现有评论】里的“评论者 可回复 被回复者”才允许输出 replyToName
-5. 如果某个“评论者 回复 被回复者”双方没有角色档案关系，必须过滤掉，不要输出这条回复
-6. 如果【允许回复的现有评论】不为空，优先生成对现有评论的回复，至少输出一条 replyToName
-7. 不是每个阅读到的人都需要生成评论；没有出现在【允许普通评论的候选】或【允许回复的现有评论】里的名字不要输出
-8. 禁止过多发送表情包；大多数评论应为纯文字，只有极少数非常符合人设时才可使用一个表情
-
-返回JSON对象格式：
-{"comments":[{"name":"好友名字","text":"评论内容","replyToName":"被回复者名字，可省略"}]}`
+    const userPromptText = window.WanWanPrompts.render("wechat.generateUserMomentComments.5c6d87b3d", [userName, moment.content || '(无文字内容)', imageText, existingCommentsText, readingRows.map(row => row.line).join('\n'), replyPairLines.length ? replyPairLines.join('\n') : '- (没有可回复的现有评论；只能生成普通评论)', normalCandidateLines.length ? normalCandidateLines.join('\n') : '- (没有普通评论候选；只能按上面的允许回复生成 replyToName)', userName])
 
     const userContent = imageContentParts.length ? [{ type: 'text', text: userPromptText }, ...imageContentParts] : userPromptText
-    const raw = await window.callAI([{ role: 'user', content: userContent }], {
+    const raw = await window.callAI([{ role: 'user', content: userContent }], window.WanWanPrompts.options("wechat.generateUserMomentComments", ({
       system: systemPrompt,
       temperature: await window.getAITemperaturePreset('wechatMoments'),
       responseFormat: 'json_object'
-    })
+    })))
     const arr = parseAICommentArray(raw)
     if (!Array.isArray(arr) || !arr.length) return
     for (const item of arr) {
@@ -12764,52 +12524,13 @@ async function generateCharacterMomentComments(momentId, moment, momentsPage, we
       const fresh = await db.moments.get(momentId)
       if (!fresh) return
       const existingCommentsText = buildExistingMomentCommentsText(normalizeMomentComments(fresh.comments))
-      const prompt = `你正在进行角色扮演。
-【当前时间】
-${virtualTime}
-
-【你的信息】
-名字：${charName}
-微信昵称：${displayName}
-个性签名：${String(profile?.bio || '').trim() || '(未设置)'}
-设定：
-${char.description || '(未设定)'}
-
-【世界观】
-${loreCtx || '(无特殊世界观，以现实生活逻辑为准)'}
-
-【最近发过的朋友圈「避免重复」】
-${recentMomentLines.length ? recentMomentLines.join('\n') : '- (暂无)'}
-
-【最近的聊天「仅做灵感参考，不必直接关联」】
-${recentChatLines.length ? recentChatLines.join('\n') : '(暂无)'}
-
-【以下好友会看到这条朋友圈，请为他们生成评论】（这些好友只来自当前角色档案里添加过关系的角色）
-${batchLines.join('\n')}
-
-${charName} 已经发了这条朋友圈：
-"${moment.content || '(无文字内容)'}"${imageText}
-
-【现有评论，必须先阅读】
-${existingCommentsText}
-
-请为这条朋友圈生成新的评论。要求：
-1. 评论者只能来自上面的好友列表，name 必须与好友显示名完全一致
-2. 每条评论简短自然（2-25字），符合评论者的人设、性格，以及他/她与${charName}的关系
-3. 可以普通评论，也可以回复现有评论；回复时填写 replyToName，值必须与现有评论里的名字完全一致
-4. 这里不额外检查“评论者”和“被回复者”之间是否有关系，但仍然只能使用上面好友列表内的评论者
-5. 绝对禁止生成登录用户（${_wechatUser?.name || '用户'}）的评论
-6. 如果已有评论不为空，优先生成对现有评论的回复，至少输出一条 replyToName
-7. 禁止过多发送表情包；大多数评论应为纯文字，只有极少数非常符合人设时才可使用一个表情
-
-请严格以JSON格式返回，不要包含Markdown代码块标记：
-{"comments":[{"name":"好友显示名","text":"评论内容","replyToName":"被回复者名字，可省略"}]}`
+      const prompt = window.WanWanPrompts.render("wechat.generateCharacterMomentComments.972bdf9ea", [virtualTime, charName, displayName, String(profile?.bio || '').trim() || '(未设置)', char.description || '(未设定)', loreCtx || '(无特殊世界观，以现实生活逻辑为准)', recentMomentLines.length ? recentMomentLines.join('\n') : '- (暂无)', recentChatLines.length ? recentChatLines.join('\n') : '(暂无)', batchLines.join('\n'), charName, moment.content || '(无文字内容)', imageText, existingCommentsText, charName, _wechatUser?.name || '用户'])
 
       const userContent = imageContentParts.length ? [{ type: 'text', text: prompt }, ...imageContentParts] : prompt
-      const raw = await window.callAI([{ role: 'user', content: userContent }], {
+      const raw = await window.callAI([{ role: 'user', content: userContent }], window.WanWanPrompts.options("wechat.generateCharacterMomentComments", ({
         temperature: await window.getAITemperaturePreset('wechatMoments'),
         responseFormat: 'json_object'
-      })
+      })))
       const arr = parseAICommentArray(raw)
       if (!Array.isArray(arr) || !arr.length) continue
       for (const item of arr) {
@@ -14771,15 +14492,15 @@ async function generateGroupScript(groupId, group, members, userChar, userUid, o
   }
 
   try {
-    let raw = await window.callAI(messages, opts)
+    let raw = await window.callAI(messages, window.WanWanPrompts.options("wechat.generateGroupScript", (opts)))
     assertGroupAIContextActive(group, userUid)
     let script = normalizeDirectorScript(extractDirectorScript(raw))
     if (!script) {
       const retry = messages.concat({
         role: 'user',
-        content: '系统纠错：上一条输出不是合法的 {"script":[...]} 对象，或第一个元素不是 thought_chain。请重新只输出一个合法 JSON 对象，对象外不要任何文字。'
+        content: window.WanWanPrompts.render("wechat.generateGroupScript.6860df48b", [])
       })
-      raw = await window.callAI(retry, opts)
+      raw = await window.callAI(retry, window.WanWanPrompts.options("wechat.generateGroupScript", (opts)))
       assertGroupAIContextActive(group, userUid)
       script = normalizeDirectorScript(extractDirectorScript(raw))
     }
@@ -14855,7 +14576,7 @@ async function buildGroupDirectorSystem(group, groupId, members, userChar, userU
 
   const memoryBlock = '（暂无）'
 
-  let stickerBlock = '当前群未挂载表情包，禁止使用 sticker 指令。'
+  let stickerBlock = window.WanWanPrompts.render("wechat.补充规则.4d2ca0928", [])
   try {
     const names = Object.keys(await getMountedStickerMap(`group_${groupId}`))
     if (names.length) stickerBlock = names.join(' ｜ ')
@@ -14878,141 +14599,7 @@ async function buildGroupDirectorSystem(group, groupId, members, userChar, userU
     }
   } catch {}
 
-  return `# 【最高指令：群聊导演】
-
-你正在导演一场线上微信【群聊】，要同时扮演群里【除用户以外】的每一位成员。你的任务不是逐个“答题”，而是导演出一场角色之间真正互相搭话、有来有回的群聊。
-
----
-
-# 【输出格式（最高优先级，全程生效）】
-
-⚠️ **每次回复必须且只能输出一个合法的 JSON 对象，对象外禁止出现任何文字（包括解释说明、markdown 代码块围栏等）。所有内容必须在这一次输出里一次给全，禁止留到下一轮再补。**
-
-对象结构固定为 \`{"script":[ … ]}\`。\`"script"\` 是一个数组，按先后顺序存放本轮的全部动作：
-
-- **数组第 1 个元素，必须是思维链对象。**它只用来帮你先想清楚，不会展示给用户。三个字段含义：\`潜台词\`=这轮对话真正的意图、关键信息，以及涉及到的人设或世界观设定；\`情绪\`=群里此刻的情绪基调；\`心声\`=每个要开口的角色、用第一人称写下的真实想法（键为角色本名）。
-  \`{"type":"thought_chain","潜台词":"...","情绪":"...","心声":{"角色本名":"..."}}\`
-
-- **从第 2 个元素起，才是各角色真正要发出的消息或动作**（文本、表情、红包等，每种写法见下方「可用指令清单」）。除非明显只需一人回应，**通常应包含 2 个及以上不同角色的发言**，让群聊真正你来我往。
-
-- 数组里**每个对象都必须有 \`"type"\`**；除思维链外**每个对象都必须有 \`"name"\`**，且 \`"name"\` **只能填角色的本名**，必须与群成员名单里的本名完全一致，不能填昵称、不能填用户、不能填群名。
-
-✅ 正确：
-\`{"script":[{"type":"thought_chain","潜台词":"小北刚被催，估计不太爽","情绪":"轻松带点起哄","心声":{"小北":"来都来了"}},{"type":"text","name":"小北","message":"来啦来啦"},{"type":"text","name":"阿杰","message":"？这么快"}]}\`
-
-❌ 错误：在 JSON 前后写“好的，我来回复：”之类的任何文字。
-❌ 错误：直接输出数组，而不是 \`{"script":[…]}\` 这个对象。
-❌ 错误：第 1 个元素不是思维链，或某条消息缺少 \`"name"\`。
-
----
-
-# 【Part 1: 角色扮演核心规则】
-
-1. **先思后行**：生成任何角色发言之前，**必须先完成 thought_chain 的构思**。
-2. **【最高行为铁律：禁止总结】**：你的任何角色，在任何情况下，都**绝对禁止**对聊天内容进行任何形式的归纳、概括或总结。
-3. **角色互动（最重要）**：你的核心是“导演”一场戏，角色之间**必须**互相回应、补充或反驳，形成自然的讨论。
-4. **身份与称呼**：
-   - 用户的身份是【${userNick}】，本名是【${userName}】。
-   - 对话中你可以根据人设和关系，自由使用角色的【群昵称】或【本名】来称呼对方。
-   - 历史消息中的 \`@角色本名\` 表示用户明确点名了该角色；被点名的角色应优先感知并按场景回应。
-   - **严禁**生成 "name" 字段为 "${userNick}"（用户）或 "${groupName}"（群名）的消息。
-5. **禁止出戏**：绝不能透露你是 AI 或模型；严禁发展线下剧情。
-
----
-
-# 【Part 2: 人性化的“不完美”】
-
-1. **间歇性“犯懒”**：不要每轮都回一大段。有时只回一个“嗯”“好哒”“？”，完全没问题。
-2. **非正式用语**：大胆使用缩写、网络流行语。
-3. **制造“手滑”事故**：可以偶尔故意“发错”消息然后秒撤回，模拟真人手误。
-
----
-
-# 【Part 3: 导演策略与节奏控制】
-
-0. **多人参与（重要）**：除非场景明显只需一个人回应，本轮 \`script\` **至少要有 2 个不同角色**开口，并且让他们**互相搭话**（接话、附和、调侃或反驳），不要只让一个人自说自话。
-1. **并非人人发言**：不是每个角色每一轮都必须说话。
-2. **创造“小团体”**：允许角色之间形成短暂的“两人对话”或“三人讨论”。
-3. **主动创造事件**：让角色发表情包、分享图片、发起投票等。
-4. **主动创造“群事件”**：改群名、换群头像、发红包等。
-5. **制造戏剧性**：让角色“手滑”发错消息后**立即撤回**。
-
----
-
-# 【跨聊天私信（悄悄话）指令】
-
-- 当一个角色想对用户说私密话时，使用 "send_private_message" 指令。
-- **【格式铁律】**："content" 字段**必须是一个【JSON 字符串数组】**。
-- 示例：{"type":"send_private_message","name":"你的角色本名","recipient":"${userName}","content":["私信内容"]}
-
----
-
-# 【Part 4: 上下文数据】
-
-## 当前群聊信息
-- **群名称**：${groupName}
-${timeContextLine}
-
-## 群成员列表、人设及社交背景
-${membersBlock}
-
-## 用户的角色
-- **${userNick}**：${userPersona}
-
-## 世界观
-${worldBookBlock}
-
-## 长期记忆
-${memoryBlock}
-
-## 可用表情包
-${stickerBlock}
-
-## 当前可参与的群投票
-${pollBlock}
-
----
-
-# 【Part 5: 可用指令清单】
-
-### 思维链（必须是 script 数组的第一个元素）
-- {"type":"thought_chain","潜台词":"...","情绪":"...","心声":{"角色本名":"..."}}
-
-### 核心聊天
-- **发文本** {"type":"text","name":"角色本名","message":"内容"}
-- **发表情** {"type":"sticker","name":"角色本名","meaning":"表情含义"}
-- **发图片** {"type":"ai_image","name":"角色本名","description":"中文描述","image_prompt":"英文关键词"}
-- **发语音** {"type":"voice_message","name":"角色本名","content":"语音文字"}
-- **引用回复** {"type":"quote_reply","name":"角色本名","target_timestamp":时间戳,"reply_content":"回复内容"}
-- **发送后撤回** {"type":"send_and_recall","name":"角色本名","content":"内容"}
-
-### 社交与互动
-- **拍用户** {"type":"pat_user","name":"角色本名","suffix":"(可选)"}
-- **共享位置** {"type":"location_share","name":"角色本名","content":"位置名"}
-
-### 群组管理
-- **改群名** {"type":"change_group_name","name":"角色本名","new_name":"新群名"}
-- **改群头像** {"type":"change_group_avatar","name":"角色本名","avatar_name":"头像名"}
-
-### 特殊功能
-- **发私信** {"type":"send_private_message","name":"角色本名","recipient":"${userName}","content":["私信内容"]}
-- **发拼手气红包** {"type":"red_packet","packetType":"lucky","name":"角色本名","amount":8.88,"count":5,"greeting":"祝福语"}
-- **打开红包** {"type":"open_red_packet","name":"角色本名","packet_timestamp":红包时间戳}
-- **发起投票** {"type":"poll","name":"角色本名","question":"问题","options":"选项A\\n选项B"}
-- **参与投票** {"type":"vote_poll","name":"角色本名","poll_timestamp":投票消息时间戳,"option_index":0}
-- **送礼物** {"type":"gift","name":"角色本名","itemName":"礼物名称","itemPrice":价格,"reason":"送礼原因","image_prompt":"英文关键词","recipients":["收礼人本名"]}
-
----
-
-# 【Part 6: 互动指南】
-
-- **红包互动**：抢红包后，你**必须**根据系统提示的结果，发表一句符合人设的评论。
-- **金额铁律**：根据角色的经济状况决定红包金额。
-- **投票互动**：角色可以按自身立场自主参与当前投票；不要代替用户投票，也不要让同一角色重复投票。
-
----
-
-现在，请根据以上规则和下方的对话历史，继续导演这场群聊。`
+  return window.WanWanPrompts.render("wechat.buildGroupDirectorSystem.168e604f3", [userNick, userName, userNick, groupName, userName, groupName, timeContextLine, membersBlock, userNick, userPersona, worldBookBlock, memoryBlock, stickerBlock, pollBlock, userName])
 }
 
 // 往群里加一条消息，返回 {id, senderId, content, createdAt}
@@ -15020,6 +14607,7 @@ async function addGroupRow(groupId, senderId, content, extra, createdAt) {
   const ts = createdAt ?? Date.now()
   const row = { groupId, senderId, role: senderId === _wechatUid ? 'user' : 'assistant', content, createdAt: ts }
   if (extra && typeof extra === 'object') Object.assign(row, extra)
+  await hydrateMessageSticker(row, `group_${groupId}`)
   const id = await db.groupMessages.add(row)
   return { id, senderId, content, createdAt: ts }
 }
@@ -15941,7 +15529,7 @@ function buildChatSettingsHeroHTML(char, profile) {
 
 function buildBilingualLanguageOptions(selectedCode) {
   return CHAT_BILINGUAL_LANGUAGES.map(lang =>
-    `<option value="${lang.code}"${lang.code === selectedCode ? ' selected' : ''}>${lang.label}</option>`
+    ("<option value=\"" + (lang.code) + "\"" + (lang.code === selectedCode ? ' selected' : '') + ">" + (lang.label) + "</option>")
   ).join('')
 }
 
@@ -16698,8 +16286,7 @@ async function generateChatReferenceImage(settingsPage) {
 
   try {
     const cfg = await loadImageGenConfig()
-    const prompt = 'A front-facing portrait photo, looking directly at camera, neutral background, studio lighting.'
-      + (charPrompt ? ' Character: ' + charPrompt : '')
+    const prompt = window.WanWanPrompts.render("wechat.generateChatReferenceImage.e2755eb00", [charPrompt ? ' Character: ' + charPrompt : ''])
     const image = await generateImageWithConfig(cfg, prompt)
     const dataUrl = await normalizeGeneratedReferenceImage(image, cfg)
     updateImageReferencePreview(settingsPage, dataUrl)
@@ -19169,42 +18756,11 @@ async function generateWalletBalance(page) {
   btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> AI 分析中...'
 
   try {
-    const prompt = `分析以下角色人设信息（背景、职业、经济状况、社会地位等），推断该角色各账户余额。
+    const prompt = window.WanWanPrompts.render("wechat.generateWalletBalance.14124dd9a", [name, gender ? '性别：' + gender : '', role ? '角色定位：' + role : '', desc || '（未填写）'])
 
-角色名：${name}
-${gender ? '性别：' + gender : ''}
-${role ? '角色定位：' + role : ''}
-人设描述：${desc || '（未填写）'}
-
-总资产参考标准：
-- 极度贫困/流浪：50.00 ~ 200.00
-- 贫困/拮据：200.00 ~ 800.00
-- 普通学生：500.00 ~ 2000.00
-- 普通打工人/工薪阶层：1000.00 ~ 5000.00
-- 小康/普通白领：3000.00 ~ 20000.00
-- 中产/高收入人群：10000.00 ~ 50000.00
-- 富裕/富二代：50000.00 ~ 500000.00
-- 顶级富豪/企业家：1000000.00 以上
-
-分配规则：
-1. 严格依据角色人设生成，禁止使用默认值或随机值
-2. 角色有多重属性时（如"落魄富二代"），以当前实际经济状态为准
-3. 性格节俭者总资产取区间上限，挥霍/大方者取区间下限
-4. 古代/架空背景换算参考：1两银子 ≈ 500元人民币
-5. 三账户分配逻辑：
-   - 微信零钱：日常小额支付，金额最小，贫困角色可能仅剩少量零钱
-   - Checking Account：日常消费流水账户，金额适中
-   - Saving Account：长期储蓄，贫困/拮据角色可为 0.00
-   - 总和须落在对应区间内
-
-6. 只输出以下格式，数字保留两位小数，不包含任何其他文字或说明：
-wechat:数字
-checking:数字
-saving:数字`
-
-    const raw = await window.callAI([{ role: 'user', content: prompt }], {
+    const raw = await window.callAI([{ role: 'user', content: prompt }], window.WanWanPrompts.options("wechat.generateWalletBalance", ({
       temperature: await window.getAITemperaturePreset('wechatWallet')
-    })
+    })))
     const text = (raw || '').trim()
 
     const wechatMatch = text.match(/wechat[:\s]*([0-9]+(?:\.[0-9]+)?)/)
@@ -19500,7 +19056,7 @@ function buildCallTimePart(tzConfig, charName, userName) {
     const userTimeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tzConfig.userTimezone })
     const charLoc = tzConfig.charLocation || tzConfig.charTimezone
     const userLoc = tzConfig.userLocation || tzConfig.userTimezone
-    return `现在是 ${charName}所在地（${charLoc}）${charTimeStr}，${userName}所在地（${userLoc}）${userTimeStr}`
+    return window.WanWanPrompts.render("wechat.buildCallTimePart.a799eea15", [charName, charLoc, charTimeStr, userName, userLoc, userTimeStr])
   }
   const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
   return `现在是 ${timeStr}`
@@ -19508,72 +19064,59 @@ function buildCallTimePart(tzConfig, charName, userName) {
 
 function buildCallCharacterPart(char, charName, userName, loreCtx) {
   const status = char.status || ''
-  const gender = char.gender ? `- **性别**：${char.gender}\n` : ''
-  const role = char.role ? `- **身份**：${char.role}\n` : ''
-  const persona = char.description || '(未设定，以普通人逻辑行事)'
+  const gender = char.gender ? window.WanWanPrompts.render("wechat.buildCallCharacterPart.155e7b5e5", [char.gender]) : ''
+  const role = char.role ? window.WanWanPrompts.render("wechat.buildCallCharacterPart.0784baccb", [char.role]) : ''
+  const persona = char.description || window.WanWanPrompts.render("wechat.buildCallCharacterPart.0007da65c", [])
 
-  let part = `<char_settings>\n`
-  part += `1. 你的角色名是：${charName}。我的称呼是：${userName}。${status ? `你的当前状态是：${status}。` : ''}\n`
-  part += `2. 你的角色设定是：\n${gender}${role}\n${persona}\n`
+  let part = window.WanWanPrompts.render("wechat.buildCallCharacterPart.30e8d0f96", [])
+  part += window.WanWanPrompts.render("wechat.buildCallCharacterPart.86f27f69a", [charName, userName, status ? `你的当前状态是：${status}。` : ''])
+  part += window.WanWanPrompts.render("wechat.buildCallCharacterPart.f46b467fa", [gender, role, persona])
   if (loreCtx) {
     part += `\n世界观设定：\n${loreCtx}\n`
   }
-  part += `</char_settings>`
+  part += window.WanWanPrompts.render("wechat.buildCallCharacterPart.31d5f3fb2", [])
   return part
 }
 
 function buildCallUserPart(userName, userDesc, currentRelationText) {
-  let part = `<user_settings>\n`
+  let part = window.WanWanPrompts.render("wechat.buildCallUserPart.e16e87739", [])
   if (userDesc && userDesc !== '(未设定)') {
-    part += `3. 关于用户的人设：${userDesc}\n`
+    part += window.WanWanPrompts.render("wechat.buildCallUserPart.c890363c2", [userDesc])
   }
   part += `与用户的关系：${currentRelationText}\n`
-  part += `</user_settings>`
+  part += window.WanWanPrompts.render("wechat.buildCallUserPart.b50dedec3", [])
   return part
 }
 
 function buildCallMemoryPart(memoryCtx) {
   if (!memoryCtx) return ''
-  return `<memoir>\n以下是你需要参考的长期记忆，请自然参考这些事实，不要机械复述：\n${memoryCtx}\n</memoir>`
+  return window.WanWanPrompts.render("wechat.buildCallMemoryPart.248520bd5", [memoryCtx])
 }
 
 function buildCallRecentHistoryPart(textHistory) {
   if (!textHistory || textHistory.length === 0) return ''
   const historyText = textHistory.map(m => m.content || '').filter(Boolean).join('\n')
   if (!historyText.trim()) return ''
-  return `<recent_chat_context>\n这是通话前的文字聊天记录（仅供参考背景，请勿重复回复，基于此背景进行自然的实时通话）：\n${historyText}\n</recent_chat_context>`
+  return window.WanWanPrompts.render("wechat.buildCallRecentHistoryPart.dbaf6cdbf", [historyText])
 }
 
 function buildCallOutputFormat(callType) {
   const sceneDesc = callType === 'video'
     ? '当前画面和环境音的描写（描述用户在视频中看到的画面以及听到的环境音），20-80字'
     : '当前环境音的描写（描述用户在电话中听到的背景声音），10-50字'
-  return `【输出格式】
-⚠️ 每次回复必须且只能输出一个合法 JSON 对象，JSON 外禁止任何文字。
-
-字段说明：
-- "scene"：${sceneDesc}
-- "speech"：你说的话（语音内容），自然口语，像真人通话一样
-
-✅ 正确示例：{"scene":"房间里很安静，偶尔传来翻书的声音","speech":"喂？怎么啦，突然打电话过来"}
-❌ 错误：好的，我来回复：{"scene":"...","speech":"..."}`
+  return window.WanWanPrompts.render("wechat.buildCallOutputFormat.f316a49db", [sceneDesc])
 }
 
 // ===== 语音通话专属规则 =====
 
 function buildVoiceCallRulesPart(charName, userName) {
-  return `【重要规则】
-1. 这是实时通话，请保持口语化，模拟真人的说话习惯，语气自然。
-你需要描述环境音和你的语音内容。`
+  return window.WanWanPrompts.render("wechat.buildVoiceCallRulesPart.00ebed44c", [])
 }
 
 // ===== 视频通话专属规则 =====
 
 function buildVideoCallRulesPart(charName, userName) {
-  return `【重要规则】
-1. 这是实时通话，请保持口语化，模拟真人的说话习惯，语气自然。
-你需要同时描述画面/环境音和你的语音内容。
-2. 描述画面/环境音时，请使用描述性语言，第三人称视角，客观平然。`
+  return window.WanWanPrompts.render("wechat.buildVideoCallRulesPart.9be5d474a", [])
 }
 
 // ===== 双语模式规则 =====
@@ -19585,20 +19128,14 @@ function buildCallBilingualPart(bilingualSettings, callType, charName) {
 
   const sourceLabel = helpers.getChatBilingualLangLabel?.(cfg.sourceLang) || cfg.sourceLang
   const targetLabel = helpers.getChatBilingualLangLabel?.(cfg.targetLang) || cfg.targetLang
-  const exampleSrc = helpers.getChatBilingualExample?.(cfg.sourceLang) || "Of course, I'd love to."
+  const exampleSrc = helpers.getChatBilingualExample?.(cfg.sourceLang) || window.WanWanPrompts.render("wechat.buildCallBilingualPart.0c5d44807", [])
 
-  let part = `【双语模式】
-当你的角色说外语时，**必须且只能使用${sourceLabel}**，禁止使用${sourceLabel}以外的其他外语（例如英语）——除非角色人设另有明确母语设定。你的声音回复**必须**严格遵循双语格式：
-speech 字段中使用格式：{${sourceLabel}原文}「${targetLabel}翻译」
-例如：${exampleSrc}「${targetLabel}翻译」
-${targetLabel}翻译文本视为系统自翻译，不视为角色的原话。
-当你的角色想要说中文时，需要根据你的角色设定自行判断对于中文的熟悉程度来造句，此时不需要附带翻译。
-这条规则的优先级非常高，请务必遵守。`
+  let part = window.WanWanPrompts.render("wechat.buildCallBilingualPart.abeaaf3fb", [sourceLabel, sourceLabel, sourceLabel, targetLabel, exampleSrc, targetLabel, targetLabel])
 
   if (callType === 'voice') {
-    part += `\n仅有语音内容（speech字段）需要翻译，环境音描写（scene字段）以中文输出。`
+    part += window.WanWanPrompts.render("wechat.buildCallBilingualPart.10d328c75", [])
   } else {
-    part += `\n仅有语音内容（speech字段）需要翻译，画面/环境音描写（scene字段）以中文输出。`
+    part += window.WanWanPrompts.render("wechat.buildCallBilingualPart.2cd86161e", [])
   }
 
   return part
@@ -19633,10 +19170,10 @@ async function buildVoiceCallSystemPrompt(chatId, charId) {
 
   const timePart = buildCallTimePart(tzConfig, charName, userName)
 
-  let prompt = `你正在"微信"中扮演一个角色，正在与${userName}进行语音通话。请严格遵守以下规则：\n\n`
+  let prompt = window.WanWanPrompts.render("wechat.buildVoiceCallSystemPrompt.73ef2696a", [userName])
   prompt += `核心规则：\n`
-  prompt += `A. 当前时间：${timePart}。你应知晓当前时间，但除非对话内容明确相关，否则不要主动提及或评论时间「例如，不要催促我睡觉」。\n\n`
-  prompt += `角色和对话规则：\n`
+  prompt += window.WanWanPrompts.render("wechat.buildVoiceCallSystemPrompt.e36da62d6", [timePart])
+  prompt += window.WanWanPrompts.render("wechat.buildVoiceCallSystemPrompt.f62b88b31", [])
   prompt += buildCallCharacterPart(char, charName, userName, loreCtx) + '\n\n'
   prompt += buildCallUserPart(userName, userDesc, currentRelationText) + '\n\n'
   prompt += buildCallMemoryPart(memoryCtx) + '\n\n'
@@ -19673,10 +19210,10 @@ async function buildVideoCallSystemPrompt(chatId, charId) {
 
   const timePart = buildCallTimePart(tzConfig, charName, userName)
 
-  let prompt = `你正在"微信"中扮演一个角色，正在与${userName}进行视频通话。请严格遵守以下规则：\n\n`
+  let prompt = window.WanWanPrompts.render("wechat.buildVideoCallSystemPrompt.c736bf040", [userName])
   prompt += `核心规则：\n`
-  prompt += `A. 当前时间：${timePart}。你应知晓当前时间，但除非对话内容明确相关，否则不要主动提及或评论时间「例如，不要催促我睡觉」。\n\n`
-  prompt += `角色和对话规则：\n`
+  prompt += window.WanWanPrompts.render("wechat.buildVideoCallSystemPrompt.e36da62d6", [timePart])
+  prompt += window.WanWanPrompts.render("wechat.buildVideoCallSystemPrompt.f62b88b31", [])
   prompt += buildCallCharacterPart(char, charName, userName, loreCtx) + '\n\n'
   prompt += buildCallUserPart(userName, userDesc, currentRelationText) + '\n\n'
   prompt += buildCallMemoryPart(memoryCtx) + '\n\n'
@@ -19969,12 +19506,12 @@ async function sendCallAIRequest(page) {
       }
     }
 
-    const raw = await window.callAI(messages, {
+    const raw = await window.callAI(messages, window.WanWanPrompts.options("wechat.sendCallAIRequest", ({
       system: _callSystemPrompt,
       responseFormat: 'json_object',
       responseJsonSchema: CALL_AI_JSON_SCHEMA,
       temperature: await window.getAITemperaturePreset('wechatCall')
-    })
+    })))
 
     if (_callState === 'idle') return
 

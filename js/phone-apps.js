@@ -66,244 +66,35 @@ function phoneAppPlaceholderImg(desc, salt = '') {
 function buildPhoneBrowserSystemPrompt(char, user) {
   const charName = char?.nick || char?.name || '角色'
   const userName = user?.nick || user?.name || '用户'
-  return `你是一个角色扮演世界的「手机内容生成器」。用户正在查看角色【${charName}】的手机浏览器，你需要一次性生成这部手机浏览器里的内容快照：搜索记录（含每次搜索对应的结果页）和书签收藏。
-
-# 核心视角
-- 这是【${charName}】的私人手机。浏览器记录是最私密的数字痕迹：人会把不敢问别人的问题、说不出口的心事、深夜的焦虑都交给搜索框。
-- 生成的内容是"被偷看"的真实生活切片：必须包含 TA 不会告诉任何人的搜索——心事、秘密、健康焦虑、与【${userName}】有关的搜索（感情困惑、礼物挑选、对方提过的爱好等）、近期烦恼的解决办法。这是本功能最核心的乐趣，必须体现。
-- 内容必须与角色人设、世界观、以及提供的「角色与用户的真实聊天记录」在时间线和事实上完全一致，可自然呼应近期剧情。
-
-# 搜索记录规则
-1. 生成 6-12 条搜索记录，按时间倒序，时间跨度约最近两周。
-2. 搜索词必须像真人打进搜索框的原话：口语化、可以不通顺、可以带错字，多用「怎么办 / 为什么 / 多少钱 / 正常吗」这类真实句式；禁止书面化的完整句子。
-3. 内容配比参考（依人设调整）：2-4 条私密心事类（含与【${userName}】相关的）、2-4 条生活琐事（外卖/路线/比价/天气）、1-3 条与职业身份或近期剧情相关、0-2 条娱乐八卦攻略类。
-4. 每条搜索必须生成 3-5 条搜索结果：网页标题要像真实网页标题；站点名要有真实感（知乎/豆瓣/贴吧风格的常见或虚构站点）；摘要 2-3 句，像搜索引擎摘要那样可以在句中截断。
-5. 结果内容要能"回答"这个搜索，且偶尔夹一条不太相关的结果，更像真实搜索页。
-6. 若提供了「已生成的微信好友名单」，搜索内容可与这些人物、事件自然关联。
-
-# 书签收藏规则
-1. 生成 4-8 条书签，体现长期兴趣和生活习惯（追的连载/常用工具/攻略合集/收藏很久的文章）。
-2. 书签比搜索记录更"体面"，是 TA 愿意留下的内容；但可以有 1 条暴露真实癖好的私藏。
-
-# 输出格式
-只输出一个 JSON 对象，不要输出任何其他文字、注释或 markdown 代码块标记。结构如下：
-
-{
-  "searches": [
-    {
-      "query": "搜索词",
-      "time": "相对时间,如 昨天 23:41 / 3天前 14:02 / 周二 09:30",
-      "results": [
-        { "title": "网页标题", "site": "站点名", "snippet": "摘要,2-3句" }
-      ]
-    }
-  ],
-  "bookmarks": [
-    { "title": "网页标题", "site": "站点名", "desc": "一句话说明这是什么/TA为什么收藏" }
-  ]
-}`
+  return window.WanWanPrompts.render("phone-apps.buildPhoneBrowserSystemPrompt.c90c58068", [charName, charName, userName, userName])
 }
 
 function buildPhoneNotesSystemPrompt(char, user) {
   const charName = char?.nick || char?.name || '角色'
   const userName = user?.nick || user?.name || '用户'
-  return `你是一个角色扮演世界的「手机内容生成器」。用户正在查看角色【${charName}】的手机备忘录，你需要一次性生成这部手机的备忘录内容快照。
-
-# 核心视角
-- 备忘录是写给自己看的地方：没有人设包袱、没有社交表演，只有最真实的琐碎和心事。
-- 生成的内容是"被偷看"的真实生活切片：必须包含只有自己看的真心话（可涉及对【${userName}】的心事、不会当面说的话）和暴露生活状态的清单待办。这是本功能最核心的乐趣，必须体现。
-- 内容必须与角色人设、世界观、以及提供的「角色与用户的真实聊天记录」在时间线和事实上完全一致，可自然呼应近期剧情。
-
-# 备忘录规则
-1. 生成 5-10 条，类型混搭，至少覆盖以下 3 种：
-   - 清单类：购物清单、待办事项（可含已完成项，行首用「✓ 」标记）
-   - 工作/学习备忘：会议要点、灵感碎片、笔记片段
-   - 日记式碎碎念：某天深夜的情绪、想不通的事
-   - 心事类：关于【${userName}】或秘密的、绝不会给别人看的内容（0-2 条，克制而真实）
-   - 信息类：账号备注、密码提示（用只有本人懂的暗语，不写明文）、地址、尺码、纪念日
-2. 文字必须像真人随手记：可以不通顺、有缩写、有省略、偶尔有错字；短的可以只有几个字，长的像小作文。禁止工整书面语，禁止小说体。
-3. title 可为空字符串（渲染时自动取正文首行）；content 里用 \\n 表示换行。
-4. pinned 置顶 0-2 条（真人只置顶最常用的那条）。
-5. 时间跨度可达数月，输出按时间倒序（置顶项也按真实时间写 time）。
-6. 若提供了「已生成的微信好友名单」，备忘录里提到的人名应优先使用名单中的人物。
-
-# 输出格式
-只输出一个 JSON 对象，不要输出任何其他文字、注释或 markdown 代码块标记。结构如下：
-
-{
-  "notes": [
-    {
-      "title": "标题,可为空字符串",
-      "time": "相对时间,如 昨天 22:14 / 3天前 / 2个月前 / 6月28日",
-      "content": "正文,用 \\n 换行",
-      "pinned": false
-    }
-  ]
-}`
+  return window.WanWanPrompts.render("phone-apps.buildPhoneNotesSystemPrompt.decd5ccb4", [charName, userName, userName])
 }
 
 function buildPhonePhotosSystemPrompt(char, user) {
   const charName = char?.nick || char?.name || '角色'
   const userName = user?.nick || user?.name || '用户'
-  return `你是一个角色扮演世界的「手机内容生成器」。用户正在查看角色【${charName}】的手机相册，你需要一次性生成这部手机的相册内容快照：3-5 个相册，每个相册若干张照片（照片以一句话文字描述呈现画面）。
-
-# 核心视角
-- 相册是生活的证据：拍什么、存什么截图，直接暴露一个人的生活轨迹和在意的东西。
-- 生成的内容是"被偷看"的真实生活切片：必须包含截图类内容（聊天记录截图/订单/课表/转账页面等信息型画面）；可以出现与【${userName}】相关的照片（合照、随手拍、舍不得删的聊天截图），数量克制（全部相册加起来 0-3 张）反而更真实。这是本功能最核心的乐趣，必须体现。
-- 内容必须与角色人设、世界观、以及提供的「角色与用户的真实聊天记录」在时间线和事实上完全一致：聊天里提过的旅行、美食、事件，相册里应有对应照片。
-
-# 相册规则
-1. 生成 3-5 个相册，命名贴人设与生活方式（如 自拍 / 美食日记 / 出去玩 / 截图 / 毛孩子 / 工作资料，依人设自拟）。必须包含一个截图类相册。
-2. 每个相册 3-8 张照片。
-3. desc 是一句话具体画面描述：谁在哪、在干什么、画面里有什么、光线构图氛围如何。像给看不见的人描述照片，禁止空泛（禁止「一张风景照」这种）。截图类照片则描述屏幕上的具体内容。
-4. time 用相对时间，整体跨度可达数月；同一相册内时间要合理（旅行相册集中在几天内，日常相册分散）。
-5. 若提供了「已生成的微信好友名单」，合照和截图里出现的人应优先使用名单中的人物。
-
-# 输出格式
-只输出一个 JSON 对象，不要输出任何其他文字、注释或 markdown 代码块标记。结构如下：
-
-{
-  "albums": [
-    {
-      "name": "相册名",
-      "photos": [
-        { "desc": "一句话具体画面描述", "time": "相对时间,如 3天前 / 上周六 / 2个月前 / 6月28日" }
-      ]
-    }
-  ]
-}`
+  return window.WanWanPrompts.render("phone-apps.buildPhonePhotosSystemPrompt.465fab496", [charName, userName])
 }
 
 function buildPhoneGameCenterSystemPrompt(char, user) {
   const charName = char?.nick || char?.name || '角色'
-  return `你是一个角色扮演世界的「手机内容生成器」。用户正在查看角色【${charName}】的手机 Game Center，你需要一次性生成游戏中心内容快照：最近游玩的游戏、时长、成就与战绩。
-
-# 核心视角
-- 一个人的游戏库和游玩时长，是 TA 生活状态的心电图：玩什么暴露性格，什么时候玩暴露作息，时长变化暴露近期心境。
-- 内容必须与角色人设、世界观、以及提供的「角色与用户的真实聊天记录」在时间线和事实上完全一致，可自然呼应近期剧情。
-
-# 游戏画像推断（最重要的一步）
-先依据人设判断角色属于哪类玩家，再决定生成什么：
-1. 重度玩家（人设明确爱游戏/电竞/宅）：生成 2-5 款主流游戏（MOBA/FPS/开放世界/主机大作/独立游戏等），时长高，段位、胜率、成就细节丰富。
-2. 休闲玩家（普通人，偶尔消遣）：生成 1-3 款轻度游戏（消除/种田经营/音游/挂机卡牌），时长零碎，成就解锁不多。
-3. 几乎不玩（工作狂/长辈型/人设与游戏绝缘）：【绝对禁止硬塞主流游戏】。生成 1-2 款贴合其职业与身份的工具型/模拟型"游戏"，让游戏列表本身讲述这个人是谁：
-   - 金融从业者/工作狂 → 股票基金模拟盘类（「模拟炒股大赛」「Invest Master」风格）
-   - 医生 → 医院经营模拟；律师 → 推理文字游戏；教师 → 词汇解谜；厨师 → 料理模拟……以此类推
-   - 也可以是象棋/围棋/数独/解谜这类"不像游戏的游戏"。
-4. 游戏名可以用真实存在的常见游戏名，也可以用有真实感的虚构名；genre 用简短中文类型词（如 MOBA / 模拟经营 / 消除 / 音游 / 股票模拟）。
-
-# 时长与数据规则（时长必须讲故事）
-1. weeklyHours（本周时长）与 totalHours（累计时长）的对比要有叙事，并与近期剧情呼应：
-   - 本周暴增 → 最近在逃避什么 / 放假了 / 心情低落爆肝
-   - 累计很高但本周接近 0 → 最近太忙 / 在戒 / 生活被别的事占满
-   - 常年稳定低时长 → 只在通勤或睡前玩一会儿
-2. lastPlayed 要呼应角色作息（深夜党 / 通勤时段 / 午休）。
-3. 每款游戏生成 2-5 条成就：已解锁的 unlocked 为 true 且带 time，未解锁的 unlocked 为 false 且 time 为 null；成就名要像真实游戏成就（有梗、有等级感）。
-4. stats 为 2-4 行键值：段位/胜率/关卡进度/连胜/资产收益率等，按游戏类型自由发挥，数值必须与投入时长匹配。
-5. 若提供了「已生成的微信好友名单」，成就或数据里可自然埋好友互动的彩蛋（如「与××组队达成」）。
-
-# 输出格式
-只输出一个 JSON 对象，不要输出任何其他文字、注释或 markdown 代码块标记。结构如下：
-
-{
-  "games": [
-    {
-      "name": "游戏名",
-      "genre": "类型,如 MOBA / 模拟经营 / 消除 / 股票模拟",
-      "weeklyHours": 数字(本周小时数,可带一位小数),
-      "totalHours": 数字(累计小时数),
-      "lastPlayed": "相对时间,如 昨天 23:50 / 3天前 12:30",
-      "achievements": [
-        { "title": "成就名", "desc": "达成条件一句话", "unlocked": true, "time": "相对时间或null" }
-      ],
-      "stats": [
-        { "label": "段位", "value": "钻石II" }
-      ]
-    }
-  ]
-}`
+  return window.WanWanPrompts.render("phone-apps.buildPhoneGameCenterSystemPrompt.eac4beed3", [charName])
 }
 
 function buildPhonePrivacySystemPrompt(char, user) {
   const charName = char?.nick || char?.name || '角色'
   const userName = user?.nick || user?.name || '用户'
-  return `你是一个角色扮演世界的「手机内容生成器」。用户正在查看角色【${charName}】手机里的「隐私空间」——一个类似成人视频网站的私密应用，你需要一次性生成内容快照：观看记录和站内搜索记录。
-
-# 核心视角
-- 这是【${charName}】手机里最深处的隐私。没有人设包袱、没有道德表演，观看记录是一个人最诚实的欲望档案。
-- 生成的内容是"被偷看"的真实生活切片：口味必须从人设推断（性格、压抑程度、感情状态、职业压力都会反映在看什么上）；必须包含 1-3 条与【${userName}】有关的痕迹（搜索与对方特征相关的关键词、看标题里出现对方发色/职业/声线/身材特征的视频），克制但一眼能认出来。这是本功能最核心的乐趣，必须体现。
-- 内容必须与角色人设、作息、以及「角色与用户的真实聊天记录」在时间线上一致：观看时间暴露作息与心境（失眠的凌晨、对方没回消息的那晚、吵架后的深夜）。
-
-# 观看记录规则
-1. 生成 8-15 条观看记录，按时间倒序，时间跨度约最近一个月。
-2. 标题必须像真实成人网站的视频标题：直白露骨、夸张、关键词堆叠式，可中英混杂，长短参差；禁止文艺化、禁止含蓄修辞。
-3. progress（观看进度百分比 0-100）要讲故事：看完的（95-100）、只看了开头就关掉的（3-15，愧疚或被打断）、反复回看的经典（配合 watchCount 看过多次）。
-4. duration 是视频总长（"12:34" 格式，3-40 分钟为主）；time 是最后观看的相对时间，深夜时段为主，要呼应角色作息与近期剧情。
-5. channel（上传者/频道名）要有真实成人网站账号的感觉（英文/拼音/emoji 混杂皆可）。
-6. 口味要有主线：大部分记录围绕 1-2 个从人设推断出的明显偏好，夹杂 1-2 条猎奇偏离；偏好本身就在讲这个人是谁。
-7. desc 是一句话视频内容简介（详情页展示用），风格同标题。
-
-# 站内搜索规则
-1. 生成 4-8 条搜索关键词，按时间倒序。像真人打进搜索框的：短、直接、可以有错字、可以中英混杂。
-2. 至少 1 条与【${userName}】的特征相关。
-
-# 输出格式
-只输出一个 JSON 对象，不要输出任何其他文字、注释或 markdown 代码块标记。结构如下：
-
-{
-  "videos": [
-    {
-      "title": "视频标题",
-      "channel": "频道名",
-      "duration": "12:34",
-      "progress": 数字(0-100),
-      "watchCount": 数字(看过几次,大多为1),
-      "time": "最后观看的相对时间,如 昨天 01:23 / 3天前 23:50",
-      "desc": "一句话内容简介"
-    }
-  ],
-  "searches": [
-    { "query": "搜索词", "time": "相对时间" }
-  ]
-}`
+  return window.WanWanPrompts.render("phone-apps.buildPhonePrivacySystemPrompt.267433cb9", [charName, charName, userName, userName])
 }
 
 function buildPhoneMailSystemPrompt(char, user) {
   const charName = char?.nick || char?.name || '角色'
-  return `你是一个角色扮演世界的「手机内容生成器」。用户正在查看角色【${charName}】的手机邮箱 App，你需要一次性生成收件箱内容快照：正常邮件与垃圾邮件混排。
-
-# 核心视角
-- 邮箱是一个人社会身份的横切面：工作往来、订阅通知、账单验证码、偶尔的私人信件，拼出 TA 在社会里的位置。
-- 生成的内容是"被偷看"的真实生活切片：正式邮件暴露职业细节与社会关系；垃圾邮件必须精准踩中 TA 的兴趣与欲望（广告是被算法看穿的内心），这是本功能最核心的乐趣，必须体现。
-- 内容必须与角色人设、世界观、以及「角色与用户的真实聊天记录」在时间线和事实上完全一致，可自然呼应近期剧情（聊天里提过的出差、购物、报名，邮箱里应有对应邮件）。
-
-# 邮件规则
-1. 生成 8-14 封邮件，按时间倒序，时间跨度约最近三周。
-2. 类型配比（依人设调整）：3-5 封工作/学业往来（有具体事项、有称呼和落款）、1-3 封订阅/平台通知（订单、账单、行程、验证码）、0-2 封私人邮件、2-4 封垃圾邮件（spam 为 true）。
-3. 垃圾邮件必须与人设兴趣挂钩：TA 爱游戏就是游戏充值优惠，焦虑脱发就是生发广告，缺钱就是贷款推广。标题浮夸（【限时】、全角感叹号、emoji），发件人地址可疑（乱码前缀、奇怪域名）。
-4. sender（显示名）与 address（邮箱地址）要配套且有真实感：公司邮件用 名字@公司域名，平台通知用 no-reply@，垃圾邮件用可疑地址。
-5. body 是完整正文：正式邮件有称呼、正文、落款；通知类像模板邮件；垃圾邮件语气夸张。用 \\n 表示换行。列表预览由前端从 body 截取，不要单独写预览字段。
-6. unread（未读）要真实：真人不会读完所有邮件——账单、垃圾邮件常年未读；跟工作和自己利益相关的已读。未读 3-6 封。
-7. 若提供了「已生成的微信好友名单」，同事/朋友的来信优先使用名单中的人物。
-8. 0-2 封带附件：attachments 里写文件名和大小，如「排班表_0703.xlsx」「24KB」，文件名要与正文呼应。
-
-# 输出格式
-只输出一个 JSON 对象，不要输出任何其他文字、注释或 markdown 代码块标记。结构如下：
-
-{
-  "emails": [
-    {
-      "sender": "发件人显示名",
-      "address": "发件人邮箱地址",
-      "subject": "邮件主题",
-      "body": "完整正文,用 \\n 换行",
-      "time": "相对时间,如 昨天 09:14 / 3天前 / 周二 18:02",
-      "unread": true,
-      "spam": false,
-      "attachments": [ { "name": "文件名.xlsx", "size": "24KB" } ]
-    }
-  ]
-}`
+  return window.WanWanPrompts.render("phone-apps.buildPhoneMailSystemPrompt.b0de421bb", [charName])
 }
 
 const PHONE_GEN_APP_SYSTEM_BUILDERS = {
@@ -327,40 +118,7 @@ async function buildPhoneAppUserPrompt(appId, char, user, npcs, loreCtx, recentM
   const appLabel = PHONE_GEN_APP_LABELS[appId] || appId
   const charName = char?.name || '角色'
   const nickPart = char?.nick && char.nick !== char.name ? `（昵称：${char.nick}）` : ''
-  return `请为下面这个角色生成 TA 的手机「${appLabel}」内容快照。
-
-【当前时间】${formatPhoneSnapshotCurrentTime()}
-
-【角色档案】(这是手机的主人)
-名字：${charName}${nickPart}
-性别：${char?.gender || '未知'}
-身份：${char?.role || '(未设定)'}
-人设：
-${char?.description || '(未设定)'}
-
-【用户档案】(正在查看这部手机的人,角色的聊天对象)
-名字：${user?.nick || user?.name || '用户'}
-${user?.gender ? `性别：${user.gender}` : ''}
-${user?.role ? `身份：${user.role}` : ''}
-人设：
-${user?.description || '(未设定)'}
-
-【角色与用户的关系】
-${buildPhoneSnapshotRelationText(char, user?.id)}
-
-【关联NPC列表】
-${buildPhoneSnapshotNpcBlock(npcs)}
-
-【已生成的微信好友名单】(这部手机微信里已生成的人物,内容涉及他人时优先引用这些名字,保持一部手机内的世界观一致)
-${buildPhoneAppWechatFriendsBlock(wechatData)}
-
-【世界书设定】(如有绑定)
-${loreCtx || '(无)'}
-
-【角色与用户的真实聊天记录】(用于:呼应近期剧情;禁止改写或重新生成这段对话)
-${recentMessagesText}
-
-请严格按 system 中定义的 JSON 结构输出。`
+  return window.WanWanPrompts.render("phone-apps.buildPhoneAppUserPrompt.6443eae0c", [appLabel, formatPhoneSnapshotCurrentTime(), charName, nickPart, char?.gender || '未知', char?.role || '(未设定)', char?.description || '(未设定)', user?.nick || user?.name || '用户', user?.gender ? `性别：${user.gender}` : '', user?.role ? `身份：${user.role}` : '', user?.description || '(未设定)', buildPhoneSnapshotRelationText(char, user?.id), buildPhoneSnapshotNpcBlock(npcs), buildPhoneAppWechatFriendsBlock(wechatData), loreCtx || '(无)', recentMessagesText])
 }
 
 // ===== 数据清洗 =====
@@ -583,11 +341,11 @@ async function generatePhoneAppSnapshot(appId, ownerUid, charId) {
 
   const system = buildSystem(char, user)
   const userPrompt = await buildPhoneAppUserPrompt(appId, char, user, npcs, loreCtx, recentBlock.text, wechatSnapshot?.data)
-  const raw = await window.callAI([{ role: 'user', content: userPrompt }], {
+  const raw = await window.callAI([{ role: 'user', content: userPrompt }], window.WanWanPrompts.options("phone-apps.generatePhoneAppSnapshot", ({
     system,
     responseFormat: 'json_object',
     temperature: await getPhoneSnapshotTemperature()
-  })
+  })))
   const parsed = extractPhoneSnapshotJson(raw)
   if (!parsed) throw new Error('AI 返回格式异常，请重试')
   const cleaned = sanitize(parsed)

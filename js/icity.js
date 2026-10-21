@@ -495,40 +495,23 @@
 
   function buildICityPrompt(ctx) {
     const recentChat = ctx.recent.map(item => `${item.speaker}: ${item.text}`).join('\n')
-    const systemPrompt = `现在你就是「${ctx.friendName}」这个人${ctx.charRole ? `，${ctx.charRole}` : ''}。这是你的设定：
-${ctx.persona || '暂无额外设定。'}
-${ctx.loreText ? `\n这是和你相关的背景设定（世界书），请把它当成你所处世界的事实：\n${ctx.loreText}\n` : ''}
-你要写一篇今天的日记，是写给自己看的，不会给别人看。请按下面的要求写：
+    const systemPrompt = window.WanWanPrompts.render("icity.buildICityPrompt.b69f2a161", [ctx.friendName, ctx.charRole ? `，${ctx.charRole}` : '', ctx.persona || '暂无额外设定。', ctx.loreText ? `\n这是和你相关的背景设定（世界书），请把它当成你所处世界的事实：\n${ctx.loreText}\n` : '', ctx.friendName])
 
-· 用「我」来写，也就是「${ctx.friendName}」的视角。写你心里真实想的、真实感觉到的东西。
-· 像平时说话那样写，不用文绉绉的。可以用口头禅、语气词、省略号、感叹号。可以自言自语，也可以想到一件事就写一件事，顺序乱一点没关系。
-· 不要写得像作文，不用讲究开头结尾和结构。就是随手记，记今天的心情和发生的小事。
-· 多写具体的事，比如：今天吃了什么、出门看到了什么、和谁说了什么话、心里在想什么。不要只写空泛的感受。
-· 字数 500 到 3000 字之间。想多写就多写，想少写就少写，不用硬凑字数。
-· 不要在日记里写日期、星期、标题、或者「第几天」这种字。时间由系统单独记，你只写日记内容就行。
-· 不要输出任何双花括号包裹的模板占位符。`
-
-    const parts = [`请以「${ctx.friendName}」的身份，写下今天的这篇日记。`]
+    const parts = [window.WanWanPrompts.render("icity.buildICityPrompt.1457889bc", [ctx.friendName])]
     if (recentChat) {
-      parts.push(`【可参考的近况】（仅作灵感，别照搬聊天原文，要转成日记口吻写感受）：\n${recentChat}`)
+      parts.push(window.WanWanPrompts.render("icity.buildICityPrompt.97e31a034", [recentChat]))
     }
 
     const taskParts = []
     if (ctx.pendingNotes.length) {
-      taskParts.push(`（A）下面是别人在你上一篇日记下留的小纸条，请逐条用「${ctx.friendName}」会有的口气回应，像朋友间随手回话那样自然简短：\n${ctx.pendingNotes.map(note => `  - 对方小纸条：${note.comment}`).join('\n')}`)
+      taskParts.push(window.WanWanPrompts.render("icity.buildICityPrompt.33bcda2c7", [ctx.friendName, ctx.pendingNotes.map(note => `  - 对方小纸条：${note.comment}`).join('\n')]))
     }
     if (ctx.userDiary) {
-      taskParts.push(`（B）这是对方写的一篇日记，读完后请你以「${ctx.friendName}」的身份给它留小纸条，就像看到朋友的日记后随手评论几句，真诚、自然、带点你自己的语气，几条都行、顺着感觉来：\n  日记内容：${ctx.userDiary.text.slice(0, 1500)}`)
+      taskParts.push(window.WanWanPrompts.render("icity.buildICityPrompt.a358c647f", [ctx.friendName, ctx.userDiary.text.slice(0, 1500)]))
     }
     if (taskParts.length) parts.push(`【附加任务】\n${taskParts.join('\n\n')}`)
 
-    parts.push(`【输出格式】只返回下面这个 JSON，不要附加任何解释或代码块标记：
-{
-  "diary": "日记正文，纯文本，换行用 \\n",
-  "noteReplies": ${ctx.pendingNotes.length ? '[{ "to": "对方那条小纸条的原文", "comment": "你的回应" }]' : '[]'},
-  "notesForUserDiary": ${ctx.userDiary ? '[{ "comment": "你想给这篇日记留的小纸条" }]' : '[]'}
-}
-说明：没有附加任务时，对应的数组返回 []。`)
+    parts.push(window.WanWanPrompts.render("icity.buildICityPrompt.1fd9582e1", [ctx.pendingNotes.length ? '[{ "to": "对方那条小纸条的原文", "comment": "你的回应" }]' : '[]', ctx.userDiary ? '[{ "comment": "你想给这篇日记留的小纸条" }]' : '[]']))
 
     return { systemPrompt, userPrompt: parts.join('\n\n') }
   }
@@ -676,7 +659,7 @@ ${ctx.loreText ? `\n这是和你相关的背景设定（世界书），请把它
       const prompt = buildICityPrompt(ctx)
       const raw = await window.callAI(
         [{ role: 'user', content: prompt.userPrompt }],
-        { system: prompt.systemPrompt, temperature: await window.getAITemperaturePreset('icityDiary'), responseFormat: 'json_object' }
+        window.WanWanPrompts.options("icity.runICityDiaryGeneration", ({ system: prompt.systemPrompt, temperature: await window.getAITemperaturePreset('icityDiary'), responseFormat: 'json_object' }))
       )
       const data = parseICityJSON(raw)
       applyICityGenerated(ctx, data)

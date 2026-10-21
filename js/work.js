@@ -26,33 +26,7 @@
     5: { bg: '#1a1a1a', fg: '#c8b080' }
   }
 
-  var EVAL_SYSTEM_PROMPT = 'You are a character value evaluation system. The user will provide a list of characters with their name and profile. Based on each profile, calculate and return exactly two values per character:\n\n' +
-    '1. **Daily RMB** – Money earned in one 8-hour workday (unit: RMB ¥)\n' +
-    '2. **Daily EXP** – A score representing the overall skill value of the character (range: 0–10)\n\n' +
-    '**Calculation Rules:**\n\n' +
-    'For Daily RMB:\n' +
-    '- Base range: ¥50–¥10000 per day\n' +
-    '- Anchor reference: real-world CNY purchasing power\n' +
-    '- A common laborer earns ~¥50–¥100/day\n' +
-    '- A skilled craftsman earns ~¥200–¥500/day\n' +
-    '- A renowned expert or artist earns ~¥1000–¥3000/day\n' +
-    '- A top-tier celebrity or irreplaceable talent earns ~¥5000–¥10000/day\n' +
-    '- Apply a multiplier (0.5x–3x) based on fame, unique abilities, or special traits mentioned in the profile\n\n' +
-    'For Daily EXP:\n' +
-    '- Range: 0.0–10.0\n' +
-    '- Represents the overall skill value and expertise level of the character\n' +
-    '- 0–2: No notable skills, beginner or unskilled\n' +
-    '- 2–4: Basic skills, entry-level competence\n' +
-    '- 4–6: Moderate skill level, experienced practitioner\n' +
-    '- 6–8: High skill level, seasoned expert\n' +
-    '- 8–10: Exceptional, world-class or irreplaceable talent\n' +
-    '- Score should reflect the depth, rarity, and mastery of skills described in the profile\n' +
-    '- If a character has a "lore" field, use it as additional background context for evaluation\n\n' +
-    '**Output Rules:**\n' +
-    '- Output ONLY valid JSON, nothing else\n' +
-    '- Do NOT wrap in markdown code blocks (no ```)\n' +
-    '- No explanation, no prefix, no suffix, no extra text before or after the JSON\n' +
-    '- Format: { "results": [{ "index": 1, "dailyRMB": number, "dailyEXP": number }, ...] }'
+  var EVAL_SYSTEM_PROMPT = window.WanWanPrompts.render("work.全局规则.f602bac30", [])
 
   var PART_TIME_JOBS = [
     { id: 'pt_store',    name: '便利店收银', icon: 'fa-store',      desc: '在便利店担任收银员', income: 20, duration: PT_DURATION },
@@ -224,7 +198,7 @@
       var userMsg = '请评估以下角色的工作能力：\n' + JSON.stringify(charList, null, 2)
       var result = await window.callAI(
         [{ role: 'user', content: userMsg }],
-        { system: EVAL_SYSTEM_PROMPT, responseFormat: 'json_object', temperature: await window.getAITemperaturePreset('qianjiWorkEvaluation') }
+        window.WanWanPrompts.options("work.evaluateCharacters", ({ system: EVAL_SYSTEM_PROMPT, responseFormat: 'json_object', temperature: await window.getAITemperaturePreset('qianjiWorkEvaluation') }))
       )
 
       var parsed

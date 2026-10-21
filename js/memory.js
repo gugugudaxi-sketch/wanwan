@@ -379,42 +379,7 @@
       var speaker = m.role === 'assistant' ? '角色' : '用户'
       return speaker + '：' + String(m.content || '').replace(/\s+/g, ' ').slice(0, 800)
     }).join('\n')
-    return `你是一个长期记忆整理器。请根据下面的聊天记录，提取适合长期保存的记忆。
-
-要求：
-1. 使用第三人称叙述。
-2. 客观平实：只陈述发生了什么、谁表达了什么、双方形成了什么关系信息或偏好信息。
-3. 禁止使用强烈情绪词汇，例如“极度愤怒”“痛彻心扉”“欣喜若狂”等。
-4. 不要价值升华，不要写感悟，不要总结人生意义。
-5. 禁止加入聊天记录中没有出现的信息。
-6. 标题应尽量简短；内容应控制在150字以内，适合未来角色回复时参考。
-
-请返回合法 JSON，不要输出 Markdown，不要输出 JSON 以外的文字。
-
-JSON 格式：
-{
-  "memories": [
-    {
-      "title": "简短标题",
-      "content": "第三人称、客观平实的记忆内容，150字以内",
-      "keywords": ["关键词1", "关键词2"],
-      "valence": 0,
-      "arousal": 0.3,
-      "importance": 5
-    }
-  ]
-}
-
-字段说明：
-- title：尽量简短，用于快速识别这条记忆。
-- content：第三人称客观陈述，150字以内，禁止夸张、抒情、升华。
-- keywords：用于后续检索的关键词。
-- valence：情感效价，-1 到 1。负数表示负向，0 表示中性，正数表示正向。
-- arousal：唤醒度，0 到 1。越接近平静越低，越涉及冲突、紧张、强烈偏好越高。
-- importance：重要度，1 到 10。长期关系事实、稳定偏好、身份背景更高；临时闲聊更低。
-
-聊天记录：
-${lines}`
+    return window.WanWanPrompts.render("memory.buildSummaryPrompt.8d8a13f44", [lines])
   }
 
   function buildMeetingSummaryPrompt(messages) {
@@ -422,44 +387,7 @@ ${lines}`
       var speaker = m.role === 'assistant' ? '角色' : '用户'
       return speaker + '：' + String(m.content || '').replace(/\s+/g, ' ').slice(0, 800)
     }).join('\n')
-    return `你是一个线下见面记忆整理器。请根据下面的见面记录，提取适合长期保存的记忆。
-
-要求：
-1. 使用第三人称叙述。
-2. 客观平实：只记录双方在线下发生的重要事件、表达的偏好、形成的约定或关系变化。
-3. 区分已经发生的事件和尚未完成的计划，不要将计划写成事实。
-4. 禁止使用强烈情绪词汇，不要进行文学化描写。
-5. 不要价值升华，不要写感悟，不要总结人生意义。
-6. 禁止加入见面记录中没有出现的信息。
-7. 不同事件或信息应拆分为多条记忆。
-8. 标题应尽量简短；内容应控制在150字以内，适合未来互动时参考。
-
-请返回合法 JSON，不要输出 Markdown，不要输出 JSON 以外的文字。
-
-JSON 格式：
-{
-  "memories": [
-    {
-      "title": "简短标题",
-      "content": "第三人称、客观平实的记忆内容，150字以内",
-      "keywords": ["关键词1", "关键词2"],
-      "valence": 0,
-      "arousal": 0.3,
-      "importance": 5
-    }
-  ]
-}
-
-字段说明：
-- title：尽量简短，用于快速识别这条记忆。
-- content：第三人称客观陈述，150字以内，禁止夸张、抒情、升华。
-- keywords：用于后续检索的关键词。
-- valence：情感效价，-1 到 1。负数表示负向，0 表示中性，正数表示正向。
-- arousal：唤醒度，0 到 1。越接近平静越低，越涉及冲突、紧张、强烈偏好越高。
-- importance：重要度，1 到 10。长期关系事实、稳定偏好、身份背景更高；临时闲聊更低。
-
-见面记录：
-${lines}`
+    return window.WanWanPrompts.render("memory.buildMeetingSummaryPrompt.c6a1719f3", [lines])
   }
 
   function extractJson(text) {
@@ -517,7 +445,7 @@ ${lines}`
     var toMsgId = fresh[fresh.length - 1].id
     var sourceAt = isValidTimestamp(fresh[fresh.length - 1].createdAt) ? Number(fresh[fresh.length - 1].createdAt) : null
     var prompt = buildSummaryPrompt(fresh)
-    var raw = await window.callMemoryAI([{ role: 'user', content: prompt }], { responseFormat: 'json_object', temperature: await window.getAITemperaturePreset('summaryMode') })
+    var raw = await window.callMemoryAI([{ role: 'user', content: prompt }], window.WanWanPrompts.options("memory.runSummary", ({ responseFormat: 'json_object', temperature: await window.getAITemperaturePreset('summaryMode') })))
     var parsed = extractJson(raw)
     var memories = Array.isArray(parsed.memories) ? parsed.memories : []
     var rows = []
@@ -594,7 +522,7 @@ ${lines}`
     var settings = await getSettings(chatId)
     var fromMsgId = source[0].id || 0
     var toMsgId = source[source.length - 1].id || fromMsgId
-    var raw = await window.callMemoryAI([{ role: 'user', content: buildMeetingSummaryPrompt(source) }], { responseFormat: 'json_object', temperature: await window.getAITemperaturePreset('summaryMode') })
+    var raw = await window.callMemoryAI([{ role: 'user', content: buildMeetingSummaryPrompt(source) }], window.WanWanPrompts.options("memory.summarizeMeeting", ({ responseFormat: 'json_object', temperature: await window.getAITemperaturePreset('summaryMode') })))
     var parsed = extractJson(raw)
     var memories = Array.isArray(parsed.memories) ? parsed.memories : []
     var rows = []

@@ -21,6 +21,7 @@ var SETTINGS_HTML =
     buildAboutSection() +
     buildNotifSection() +
     buildApiSection() +
+    '<div class="setting-section"><div class="list-row clickable" id="row-prompt-workbench"><div class="row-icon-box"><i class="fa fa-sliders"></i></div><div class="row-body"><div class="row-label">提示词与生成参数</div></div><i class="fa fa-angle-right row-chevron"></i></div></div>' +
     buildAppearanceSection() +
     buildOnlineSection() +
     buildDataSection() +
@@ -344,6 +345,7 @@ function buildSettingsPage() {
   page.id = 'settings-page'
   page.className = 'full-page'
   page.innerHTML = SETTINGS_HTML
+  page.querySelector('#row-prompt-workbench').onclick = () => window.WanWanPrompts.open()
   return page
 }
 
@@ -3235,17 +3237,19 @@ window.runTrackedChatCompletion = async function(cfg, body, apiType) {
 // opts 可额外提供 tools、toolExecutor、toolObserver、maxToolCalls、toolSession。
 async function fetchAI(cfg, messages, opts) {
   opts = opts || {}
+  if (window.WanWanPrompts) opts = await window.WanWanPrompts.prepare(opts)
   if (!cfg.url || !cfg.key) throw new Error('API未配置')
   var apiType = opts.apiConsoleType || '文本生成 API'
   var system = opts.system
   var temperature = opts.temperature
   function baseBody(activeMessages) {
     var body = {
-      model: cfg.model || 'gpt-4o-mini',
-      messages: system ? [{ role: 'system', content: system }].concat(activeMessages) : activeMessages
+      model: opts.model || cfg.model || 'gpt-4o-mini',
+      messages: system ? [{ role: opts.systemRole || 'system', content: system }].concat(activeMessages) : activeMessages
     }
     if (temperature != null) body.temperature = temperature
-    var js = opts.responseJsonSchema
+    for (const key of ['top_p','max_tokens','frequency_penalty','presence_penalty']) if (opts[key] != null) body[key] = opts[key]
+    var js = opts.responseFormat === 'text' ? null : opts.responseJsonSchema
     if (js && js.name && js.schema) {
       body.response_format = {
         type: 'json_schema',
@@ -3257,6 +3261,7 @@ async function fetchAI(cfg, messages, opts) {
     return body
   }
   var doFetch = function(b) {
+    window.WanWanPrompts?.record(opts._promptFeature, b)
     return window.runTrackedChatCompletion(cfg, b, apiType)
   }
   var originalMessages = Array.isArray(messages) ? messages.slice() : []

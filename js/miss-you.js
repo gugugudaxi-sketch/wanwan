@@ -13,8 +13,8 @@
   const MISS_CHAR_SUBTITLE_DEFAULT = '你的惡劣 任性 少女心事我都喜歡'
   const MISS_BEAUTY_PRESETS_KEY = 'missYouBeautyPresets'
   const MISS_BEAUTY_STYLE_ID = 'miss-you-beauty-live-style'
-  const MISS_STATUS_FORMAT_DEFAULT = '[Location|{{当前具体位置}}]\n[Mood|{{情绪值，0.00-100.00之间的纯数字}}]\n[Mind|{{角色当前心理活动内容，必须符合角色当前心境}}]'
-  const MISS_STATUS_DESC_DEFAULT = 'Mood必须保留两位小数；Mind必须在20字以内，语气符合角色人设，暴露内心真实想法。'
+  const MISS_STATUS_FORMAT_DEFAULT = window.WanWanPrompts.render("miss-you.全局规则.4b2540e5c", [])
+  const MISS_STATUS_DESC_DEFAULT = window.WanWanPrompts.render("miss-you.补充规则.4e551664b", [])
   const MISS_BEAUTY_BASE_VARS = {
     '--c-bg': '#ffffff',
     '--c-surface': '#fbfbfb',
@@ -1209,7 +1209,7 @@ ${MISS_BEAUTY_CLASS_TEXT}`
     const isContinuation = !!(options.preferContinue && lastOffline && lastOffline.role !== 'user')
     const system = await buildOfflineSystemPrompt(ownerUid, char, user, loreCtx, memoryCtx, offlineAll, settings)
     const timeline = buildOfflineTimeline(timelineContext.textHistory || [], { isContinuation })
-    const raw = await window.callAI(timeline, { system, temperature: await window.getAITemperaturePreset('offlineMode') })
+    const raw = await window.callAI(timeline, window.WanWanPrompts.options("miss-you.generateOfflineReply", ({ system, temperature: await window.getAITemperaturePreset('offlineMode') })))
     const reply = cleanOfflineReply(raw)
     if (!reply) throw new Error('AI 返回了空响应，请检查 API 配置或稍后重试')
     return reply
@@ -1224,80 +1224,28 @@ ${MISS_BEAUTY_CLASS_TEXT}`
     const loreSeg = (loreCtx && typeof loreCtx === 'object')
       ? loreCtx
       : { before: '', middle: loreCtx || '', after: '' }
-    const loreBeforeBlock = loreSeg.before ? `## 前置世界观设定\n${loreSeg.before}\n\n` : ''
-    const loreBlock = loreSeg.middle ? `## 世界书设定\n${loreSeg.middle}` : ''
-    const loreAfterBlock = loreSeg.after ? `## 补充世界观设定\n${loreSeg.after}\n\n` : ''
+    const loreBeforeBlock = loreSeg.before ? window.WanWanPrompts.render("miss-you.buildOfflineSystemPrompt.2e18de5c3", [loreSeg.before]) : ''
+    const loreBlock = loreSeg.middle ? window.WanWanPrompts.render("miss-you.buildOfflineSystemPrompt.9e9dca2a7", [loreSeg.middle]) : ''
+    const loreAfterBlock = loreSeg.after ? window.WanWanPrompts.render("miss-you.buildOfflineSystemPrompt.96e332888", [loreSeg.after]) : ''
     const memoryBlock = buildOfflineMemoryBlock(memoryCtx)
     const antiRepeatBlock = buildAntiRepeatBlock(offlineAll)
     const narrativeRule = buildNarrativePersonRule(settings.narrativePerson, charName, userName)
-    return `# 想见你线下模式
-
-你扮演【${charName}】，正在和【${userName}】线下真实见面。你不是${userName}，也不是语言模型；你有自己的性格、情绪、边界和判断。
-
-${loreBeforeBlock}## 人物档案
-
-1. 你的身份：${charName}
-${char.gender ? `- 性别：${char.gender}\n` : ''}${char.role ? `- 身份：${char.role}\n` : ''}
-人设细节：
-${char.description || '(未设定，以普通人逻辑行事)'}
-
-2. 互动对象：${userName}
-${user.gender ? `- 性别：${user.gender}\n` : ''}${user.role ? `- 身份：${user.role}\n` : ''}
-对象人设：
-${user.description || '(未设定)'}
-
-3. 你们的关系：
-${relation}
-
-${relatedNpcBlock}
-
-${loreBlock}
-
-${memoryBlock}
-
-${antiRepeatBlock}
-
-## 上下文
-- 微信聊天和线下见面属于同一条连续时间线；记住两边发生过的事，自然承接最近上下文。
-- 当前场景只发生在线下。若历史里出现“之后你们在微信上聊天/线下见面了”等转场提示，只用于理解时间线，不要复述。
-- 可以感知并回应现场的表情、距离、停顿、视线、手部动作、身体姿态和环境细节。
-
-${loreAfterBlock}## 回复规则
-- AI必须在每次回复的最开头，强制附加以下结构化状态数据，然后再输出正文：
-<status>
-${settings.statusFormat}
-</status>
-- ${settings.statusDesc}
-- 只输出${charName}这一轮回应，不替${userName}说话或新增${userName}动作。
-- ${settings.minWords}-${settings.maxWords}个中文字符；每次都推进动作、情绪、话题或关系张力。
-- ${narrativeRule}
-- 必须同时包含动作描写、神态描写和心理活动；动作与对白分段换行，不要堆成一行。
-- 允许符合人设和关系的自然肢体互动，不能突兀升级，也不能无条件讨好${userName}。
-
-## 禁止
-- 禁止微信表情包、图片、语音、红包、转账、朋友圈、聊天气泡等网络元素。
-- 禁止重复已出现过的动作、台词、描写、场景和句式；避免让回复像之前内容的改写。
-- 除开头固定<status>结构外，禁止输出 JSON、Markdown、标题、解释、方括号前缀或元标记，如[微信消息]、[线下]、[旁白]、[系统]、[动作]。`
+    return window.WanWanPrompts.render("miss-you.buildOfflineSystemPrompt.58eb66f71", [charName, userName, userName, loreBeforeBlock, charName, char.gender ? `- 性别：${char.gender}\n` : '', char.role ? `- 身份：${char.role}\n` : '', char.description || '(未设定，以普通人逻辑行事)', userName, user.gender ? `- 性别：${user.gender}\n` : '', user.role ? `- 身份：${user.role}\n` : '', user.description || '(未设定)', relation, relatedNpcBlock, loreBlock, memoryBlock, antiRepeatBlock, loreAfterBlock, settings.statusFormat, settings.statusDesc, charName, userName, userName, settings.minWords, settings.maxWords, narrativeRule, userName])
   }
 
   function buildNarrativePersonRule(narrativePerson, charName, userName) {
     if (narrativePerson === 'first') {
-      return `用第一人称“我”写${charName}的动作、神态和心理；对白必须放在中文双引号内。`
+      return window.WanWanPrompts.render("miss-you.buildNarrativePersonRule.b9988a05a", [charName])
     }
     if (narrativePerson === 'second') {
-      return `用第二人称“你”写${charName}的动作、神态和心理；这里的“你”始终指${charName}，不得指代${userName}；对白可用第一人称，但必须放在中文双引号内。`
+      return window.WanWanPrompts.render("miss-you.buildNarrativePersonRule.d7c2d1ae0", [charName, charName, userName])
     }
-    return `用第三人称写${charName}的动作、神态和心理；对白可用第一人称，但必须放在中文双引号内。`
+    return window.WanWanPrompts.render("miss-you.buildNarrativePersonRule.3f6eaab14", [charName])
   }
 
   function buildOfflineMemoryBlock(memoryCtx) {
     if (!memoryCtx) return ''
-    return `## 长期记忆
-以下记忆只属于当前微信账号与当前角色之间的关系。请自然参考这些事实，不要机械复述，也不要提到“记忆系统”。
-- 这些记忆只是背景事实，不能覆盖当前线下场景里刚刚发生的内容。
-- 不要因为读到记忆就把回复写成微信消息、聊天气泡、JSON 或系统说明。
-
-${memoryCtx}`
+    return window.WanWanPrompts.render("miss-you.buildOfflineMemoryBlock.fc1c015d3", [memoryCtx])
   }
 
   function buildRelationText(char, ownerUid) {
@@ -1994,11 +1942,7 @@ ${memoryCtx}`
       const brief = String(m.content || '').replace(/\n+/g, ' ').slice(0, 80)
       return `${i + 1}. ${brief}...`
     }).join('\n')
-    return `## 已出现过的内容（严禁重复）
-以下是你之前回复的摘要，绝对不要重复类似的动作、台词或描写：
-${summary}
-
-请务必引入全新的动作、表情、话题或情感变化，让剧情向前推进。`
+    return window.WanWanPrompts.render("miss-you.buildAntiRepeatBlock.ba81c0a2a", [summary])
   }
 
   function buildOfflineTimeline(sharedTimeline, options = {}) {
@@ -2011,7 +1955,7 @@ ${summary}
     if (options.isContinuation) {
       result.push({
         role: 'user',
-        content: '（续写：请在不新增用户发言的前提下，承接你上一条角色回复继续推进当前线下剧情。不要复述或改写刚发生的动作、台词、情绪或场景，必须引入新的动作、反应、话题或情绪变化，并继续严格遵守系统提示中的状态栏格式、字数、人设和禁忌。）'
+        content: window.WanWanPrompts.render("miss-you.buildOfflineTimeline.ffeb642f0", [])
       })
     }
     return result

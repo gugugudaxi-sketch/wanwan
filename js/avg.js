@@ -226,61 +226,24 @@
     },
 
     promptIntro: function(save) {
-      return '你是橙光风格校园恋爱互动游戏《校园皆是修罗场》的剧情引擎。\n\n' +
-        '【世界观】现代大学，主角' + save.player.name + '（' + save.player.gender + '）刚转入某大学二年级（3）班，\n' +
-        '该专业实行固定教室上课，主角的座位被几位性格迥异的同学包围。\n' +
-        '剧情基调：青春、暧昧、暗流涌动的多角修罗场，可甜可虐，\n' +
-        '但不出现露骨内容与真实校园暴力细节。'
+      return window.WanWanPrompts.render("avg.promptIntro.979fcd402", [save.player.name, save.player.gender])
     },
 
     favorStages: '0-19 陌生礼貌 / 20-39 留意在乎 / 40-59 明显偏爱、开始吃醋 / 60-79 占有欲与主动出击 / 80+ 不计代价。',
-    dramaRule: '修罗场值 ≥60 时，高好感角色之间必须出现正面交锋（抢话、阴阳怪气、肢体挡人等）。',
+    dramaRule: window.WanWanPrompts.render("avg.补充规则.f5704051f", []),
 
-    writingRules: '1. 旁白第二人称「你」，细腻但简洁，单轮总字数 300-500 字；\n' +
-      '2. 台词符合大学生语感，带小动作描写；每轮至少让 2 名角色出场或被提及；\n' +
-      '3. 每轮给出 2-4 个选项：至少 1 个偏向不同角色，至少 1 个影响主角属性；\n' +
-      '   选项后果要有差异，不许出现「换皮同义」选项；\n' +
-      '4. 数值变化克制：单选项好感 -8~+8、属性 -5~+5、修罗场 0~+6；\n' +
-      '5. 剧情必须服从【本章导演指令】的走向与禁止事项；\n' +
-      '6. 只输出 JSON，格式见【输出格式】，不要输出任何其他文字。',
+    writingRules: window.WanWanPrompts.render("avg.全局规则.27472159b", []),
 
     // §5.0 角色校园化 Prompt（导入时逐角色调用一次）
     buildAdaptPrompt: function(ch) {
-      return '你是角色档案改编助手。请把下面这个角色改编为互动游戏《校园皆是修罗场》\n' +
-        '中的角色：现代大学校园，与主角同班的大学生。\n\n' +
-        '【原始档案】\n' +
-        '名字：' + ch.name + '\n' +
-        '性别：' + (ch.gender || '（空）') + '\n' +
-        '人设：' + (ch.persona || '（无）') + '\n\n' +
-        '【改编规则】\n' +
-        '1. 只允许改写「人设」。名字由系统直接沿用原档案，你不需要处理名字，\n' +
-        '   改编后的人设中提及该角色时必须用原名，不要起外号；\n' +
-        '2. 性别：原档案已给出性别时，原样保留、禁止更改；\n' +
-        '   仅当性别为空时，阅读人设自行判定一个最贴合的性别并填入；\n' +
-        '3. 身份落位：无论原设是总裁、皇帝、杀手、神明、异世界人……一律改编为\n' +
-        '   「同班大学生」，并给出合理的校园化对应（总裁→家里有集团的大学生/学生会主席，\n' +
-        '   古代将军→体育特长生/国防生，神医→医学部跨系来蹭课的学霸等），\n' +
-        '   原设中的核心背景可保留为「家世/经历/传闻」，但当前身份必须是在读大学生；\n' +
-        '4. 性格完整保留：说话方式、口癖、癖好、雷点、喜好全部保留，不许洗白或降智；\n' +
-        '   与校园无关的能力设定（超能力、武功等）改写为对应的特长或删除；\n' +
-        '5. 改编后人设 150-300 字，包含：校园身份（年级/专业/社团或身份标签）、\n' +
-        '   性格与说话方式、对陌生同学的初始态度、1-2 个可用于剧情的小习惯或传闻；\n' +
-        '6. 同时提炼 3-5 个性格标签：每个 2-4 字的短词（如「高冷」「毒舌」「奶狗」），\n' +
-        '   概括性格与人设记忆点，不要重复近义词。\n\n' +
-        '【输出格式】只输出 JSON，不要其他文字：\n' +
-        '{ "gender": "男|女（按规则2）", "persona": "改编后的校园人设", "tags": ["标签1", "标签2", "标签3"] }'
+      return window.WanWanPrompts.render("avg.buildAdaptPrompt.9be32cfa8", [ch.name, ch.gender || '（空）', ch.persona || '（无）'])
     },
 
     chapters: [
       {
         name: '序章 · 转学第一天',
         favorCap: 25,
-        directive: '【本章导演指令 · 序章】\n' +
-          '走向：主角转学报到→自我介绍→安排座位→与每位角色发生一次「初见事件」\n' +
-          '（借笔、撞肩、被认错人、递错情书等，每人一个，风格差异要大）。\n' +
-          '节奏：轻快日常，暧昧只许若有似无。\n' +
-          '禁止：任何角色好感表现超过「留意」级；禁止冲突事件；禁止告白。\n' +
-          '数值范围：本章内单角色好感不得超过 25。',
+        directive: window.WanWanPrompts.render("avg.全局规则.1d42885f8", []),
         endEvent: '【章末事件指令】放学时下雨，只有一个人「恰好」多带了伞——由当前好感最高者触发，\n' +
           '其他角色目击，埋下修罗场种子。请演出该事件并收束本章，本轮不给选项（choices 为空数组），progress.eventDone 置 true。',
         checkEnd: function(save) {
@@ -291,13 +254,7 @@
       {
         name: '第一章 · 座位攻防战',
         favorCap: 45,
-        directive: '【本章导演指令 · 第一章】\n' +
-          '走向：期中考后班级调座位传闻四起→各角色用各自方式争取/维持靠近主角的位置\n' +
-          '（学霸型用成绩谈判、体育型直接找辅导员、腹黑型使小手段）→穿插 2-3 个双人独处小事件。\n' +
-          '节奏：竞争感上升，允许角色间轻微较劲（口头、抢占先机），但仍维持表面和平。\n' +
-          '必须触发：至少一次「两名角色同时向主角示好、主角必须二选一」的选项轮。\n' +
-          '禁止：正面撕破脸；告白；任何角色退场。\n' +
-          '数值范围：允许好感冲到 45；修罗场值本章应升至 20-35。',
+        directive: window.WanWanPrompts.render("avg.全局规则.359a9405a", []),
         endEvent: '【章末事件指令】座位调整公布，结果偏向玩家累计选择最多的角色；\n' +
           '落选角色留下一句意味深长的话作为下章引子。请演出该事件并收束本章，本轮不给选项（choices 为空数组），progress.eventDone 置 true。',
         checkEnd: function(save) {
@@ -307,16 +264,8 @@
       {
         name: '第二章 · 纸条与绯闻',
         favorCap: 60,
-        directive: '【本章导演指令 · 第二章】\n' +
-          '走向：一张匿名纸条/一则绯闻在班里流传（内容与主角有关）→各角色反应分化：\n' +
-          '有人信、有人查、有人吃醋、有人将计就计→主角选择澄清方式决定人缘与心机走向。\n' +
-          '节奏：暗流变明流。高好感角色（≥40）必须表现出吃醋与试探，允许阴阳怪气、\n' +
-          '课间堵人、故意在主角面前较劲。\n' +
-          '必须触发：一次三人以上同场的尴尬修罗场面（如食堂拼桌、小组作业分组、体育课分组）。\n' +
-          '禁止：肢体冲突升级到打架；角色黑化到不可挽回。\n' +
-          '数值范围：允许好感冲到 60；修罗场值应升至 40-60。',
-        endEvent: '【章末事件指令】绯闻源头揭晓——与其中一名角色有关（选好感第二高者，制造张力），\n' +
-          '主角获得「原谅/疏远/利用」三向选择（本轮 choices 必须正好是这三个方向），直接影响该角色终章走向。progress.eventDone 置 true。',
+        directive: window.WanWanPrompts.render("avg.全局规则.c1b06b46f", []),
+        endEvent: window.WanWanPrompts.render("avg.全局规则.74fb95e3c", []),
         checkEnd: function(save) {
           return save.drama >= 40 && save.chapterTurns >= 4
         }
@@ -324,15 +273,7 @@
       {
         name: '第三章 · 摊牌前夜',
         favorCap: 85,
-        directive: '【本章导演指令 · 第三章】\n' +
-          '走向：校运会/校园文化节筹备期→主线角色（当前好感最高者）发起接近攻势，\n' +
-          '其余角色做最后争取或体面退出→安排一次主线角色的「脆弱面」独处事件\n' +
-          '（受伤、家事、旧照片等，深化羁绊）。\n' +
-          '节奏：情感浓度最高的一章，允许暧昧直球：递水、系鞋带、天台谈心、耳机分你一只。\n' +
-          '必须触发：一次「其他角色目击主角与主线角色独处」的修罗场事件，\n' +
-          '目击者反应按其好感与性格分化（祝福/死缠/黑化倾向）。\n' +
-          '禁止：正式告白成功（留给终章）；主线角色 OOC 式突然冷淡。\n' +
-          '数值范围：主线角色好感应推到 60-80；修罗场值 50-75。',
+        directive: window.WanWanPrompts.render("avg.全局规则.704a7ff43", []),
         endEvent: '【章末事件指令】主线角色约主角「明天放学后，天台见」；\n' +
           '当晚其余高好感角色各发出一条动摇信息（短信/纸条）。请演出该事件并收束本章，本轮不给选项（choices 为空数组），progress.eventDone 置 true。',
         checkEnd: function(save) {
@@ -365,14 +306,7 @@
     buildEndingDirective: function(save) {
       var ending = CAMPUS_GAME.computeEnding(save)
       var main = ending.main
-      return '【本章导演指令 · 终章】\n' +
-        '走向：天台赴约→按下方系统已判定的结局线演出，本章选项减少（1-2 轮），以演出为主。\n' +
-        '系统判定结果（必须严格照此演出，不得自行改线）：\n' +
-        '- 主线角色：' + (main ? main.name : '（无）') + '（当前好感 ' + (main ? main.favor : 0) + '）\n' +
-        '- 结局线：' + ending.label + '\n' +
-        '写作要求：结局 600-900 字，回收前四章至少 3 个伏笔（雨伞、纸条、座位、耳机等），\n' +
-        '末尾附一句「' + (main ? main.name : 'XX') + '线 · 结局达成」标题式收束。\n' +
-        '禁止：新增角色；新增未铺垫的反转。'
+      return window.WanWanPrompts.render("avg.buildEndingDirective.ce149accd", [main ? main.name : '（无）', main ? main.favor : 0, ending.label, main ? main.name : 'XX'])
     }
   }
 
@@ -471,68 +405,25 @@
     },
 
     promptIntro: function(save) {
-      return '你是橙光风格民国谍战恋爱互动游戏《谍影留声》的剧情引擎。\n\n' +
-        '【世界观】1937 年前后的上海租界。主角' + save.player.name + '（' + save.player.gender + '）明面上是\n' +
-        '百乐门新来的琴师兼报馆见习记者，实为地下情报网的外围联络员，代号「夜莺」。\n' +
-        '剧情基调：乱世浮华、暧昧与试探并存的多角修罗场，恋爱为主、谍战为骨，\n' +
-        '可甜可虐，但不出现露骨内容、酷刑细节与真实历史人物。'
+      return window.WanWanPrompts.render("avg.promptIntro.c44a84d7a", [save.player.name, save.player.gender])
     },
 
     favorStages: '0-19 视作可利用的陌生人 / 20-39 留意与试探 / 40-59 明显偏爱、开始为主角破例 /\n' +
       '60-79 占有欲与保护欲并起、主动排除情敌 / 80+ 可以为主角背叛立场。',
-    dramaRule: '修罗场值 ≥60 时，高好感角色之间必须出现正面交锋（舞池抢舞伴、席间夹枪带棒、\n' +
-      '以权势或情报互相牵制等）。',
+    dramaRule: window.WanWanPrompts.render("avg.全局规则.8f51835e4", []),
 
-    writingRules: '1. 旁白第二人称「你」，带民国氛围细节（留声机、黄包车、霓虹、雨巷），\n' +
-      '   细腻但简洁，单轮总字数 300-500 字；\n' +
-      '2. 台词符合各角色身份与时代语感，带小动作描写；每轮至少让 2 名角色出场或被提及；\n' +
-      '3. 每轮给出 2-4 个选项：至少 1 个偏向不同角色，至少 1 个影响主角属性；\n' +
-      '   选项后果要有差异，不许出现「换皮同义」选项；\n' +
-      '4. 数值变化克制：单选项好感 -8~+8、属性 -5~+5、修罗场 0~+6；\n' +
-      '5. 剧情必须服从【本章导演指令】的走向与禁止事项；\n' +
-      '6. 对主角与攻略对象的性别不做任何假设之外的描写，亲密描写保持含蓄唯美；\n' +
-      '7. 只输出 JSON，格式见【输出格式】，不要输出任何其他文字。',
+    writingRules: window.WanWanPrompts.render("avg.全局规则.c1f3b829e", []),
 
     // §5.0 角色民国化改编 Prompt（导入时逐角色调用一次）
     buildAdaptPrompt: function(ch) {
-      return '你是角色档案改编助手。请把下面这个角色改编为互动游戏《谍影留声》\n' +
-        '中的角色：1937 年前后的上海，主角在百乐门与报馆间周旋时会反复接触的人物。\n\n' +
-        '【原始档案】\n' +
-        '名字：' + ch.name + '\n' +
-        '性别：' + (ch.gender || '（空）') + '\n' +
-        '人设：' + (ch.persona || '（无）') + '\n' +
-        '立场关系：' + (ch.seat || '') + '（当权者/世家/同行者/局外人/暗处者）\n\n' +
-        '【改编规则】\n' +
-        '1. 只允许改写「人设」。名字由系统直接沿用原档案，你不需要处理名字，\n' +
-        '   改编后的人设中提及该角色时必须用原名，不要起外号；\n' +
-        '2. 性别：原档案已给出性别时，原样保留、禁止更改；\n' +
-        '   仅当性别为空时，阅读人设自行判定一个最贴合的性别并填入；\n' +
-        '3. 身份落位：无论原设是总裁、大学生、杀手、神明、异世界人……一律改编为\n' +
-        '   与其【立场关系】相称的民国身份（当权者→军官/警务处要员，世家→洋行少东/\n' +
-        '   旧贵族继承人，同行者→报馆同事/电台报务员，局外人→外籍医生/画家/教授，\n' +
-        '   暗处者→来历不明的掮客/舞客），原设核心背景可保留为「家世/经历/传闻」；\n' +
-        '4. 现代元素（手机、网络、汽车品牌等）改写为民国等价物（电话、电报、报纸、\n' +
-        '   唱片、黄包车等）；性格完整保留：说话方式、口癖、癖好、雷点、喜好\n' +
-        '   全部保留，不许洗白或降智；超自然能力改写为对应的特长或删除；\n' +
-        '5. 改编后人设 150-300 字，包含：民国身份（职务/家世/在租界的位置）、\n' +
-        '   性格与说话方式、对陌生人的初始态度、1-2 个可用于剧情的小习惯或传闻；\n' +
-        '6. 同时提炼 3-5 个性格标签：每个 2-4 字的短词（如「腹黑」「毒舌」「洁癖」），\n' +
-        '   概括性格与人设记忆点，不要重复近义词。\n\n' +
-        '【输出格式】只输出 JSON，不要其他文字：\n' +
-        '{ "gender": "男|女（按规则2）", "persona": "改编后的民国人设", "tags": ["标签1", "标签2", "标签3"] }'
+      return window.WanWanPrompts.render("avg.buildAdaptPrompt.083d89404", [ch.name, ch.gender || '（空）', ch.persona || '（无）', ch.seat || ''])
     },
 
     chapters: [
       {
         name: '序章 · 夜莺入沪',
         favorCap: 25,
-        directive: '【本章导演指令 · 序章】\n' +
-          '走向：主角初到上海报到→接头人只留下一句「先站稳脚跟」→入职百乐门与报馆\n' +
-          '→与每位角色发生一次「初见事件」（舞池救场、采访碰壁、雨夜同伞、\n' +
-          '错拿大衣、被误认故人等，每人一个，风格差异要大，须与其立场关系呼应）。\n' +
-          '节奏：浮华都市的新鲜感 + 若有似无的被注视感，暧昧只许一闪而过。\n' +
-          '禁止：任何角色好感表现超过「留意」级；禁止身份危机事件；禁止告白。\n' +
-          '数值范围：本章内单角色好感不得超过 25。',
+        directive: window.WanWanPrompts.render("avg.全局规则.b01cf432f", []),
         endEvent: '【章末事件指令】百乐门打烊后主角收到第一封匿名任务信；抬头时发现当前好感最高者「恰好」还没走，\n' +
           '目光在信封上停了一瞬——埋下修罗场与疑心的双重种子。请演出该事件并收束本章，本轮不给选项（choices 为空数组），progress.eventDone 置 true。',
         checkEnd: function(save) {
@@ -543,15 +434,7 @@
       {
         name: '第一章 · 舞池与棋局',
         favorCap: 40,
-        directive: '【本章导演指令 · 第一章】\n' +
-          '走向：主角接到首个正式任务（打探一份货运名单）→各角色以各自方式接近主角\n' +
-          '（当权者以「保护」为名安插眼线、世家递出宴会请柬、同行者暗中递话、\n' +
-          '局外人提供避风港、暗处者送来来路不明的提示）→穿插 2-3 个双人独处小事件\n' +
-          '→本章内须让货运名单任务有个结果（成或败均可）。\n' +
-          '节奏：竞争感上升，各角色开始互相打听主角，允许轻微较劲（口头机锋、抢先赴约）。\n' +
-          '必须触发：至少一次「两名角色同时向主角发出邀约、主角必须二选一」的选项轮。\n' +
-          '禁止：正面撕破脸；告白；主角身份被实质怀疑；任何角色退场。\n' +
-          '数值范围：允许好感冲到 40；修罗场值本章应升至 15-30。',
+        directive: window.WanWanPrompts.render("avg.全局规则.a72704e04", []),
         endEvent: '【章末事件指令】任务收尾当晚，落选邀约的角色在百乐门门口「偶遇」主角，\n' +
           '留下一句意味深长的话作为下章引子。请演出该事件并收束本章，本轮不给选项（choices 为空数组），progress.eventDone 置 true。',
         checkEnd: function(save) {
@@ -561,15 +444,7 @@
       {
         name: '第二章 · 请柬与耳目',
         favorCap: 55,
-        directive: '【本章导演指令 · 第二章】\n' +
-          '走向：一场各方势力齐聚的公馆晚宴→主角奉命赴宴窃取一枚印章拓样\n' +
-          '→高好感角色（≥40）在宴会上围绕主角明争暗斗：抢第一支舞、挡酒、\n' +
-          '借介绍之名互相试探底细→主角的周旋方式决定交际与伪装走向\n' +
-          '→晚宴任务须在本章内收尾（得手或惊险脱身二选一）。\n' +
-          '节奏：暗流变明流。允许阴阳怪气、当众较劲、借势压人。\n' +
-          '必须触发：一次三人以上同场的尴尬修罗场面（舞池、露台或牌桌）。\n' +
-          '禁止：暴力冲突；主角任务当场败露；角色黑化到不可挽回。\n' +
-          '数值范围：允许好感冲到 55；修罗场值应升至 30-50。',
+        directive: window.WanWanPrompts.render("avg.全局规则.d95a0992b", []),
         endEvent: '【章末事件指令】离场时主角发现拓样信封被人调过包——里面多了一张字条：\n' +
           '「我帮你收了尾。想知道是谁，下周三，国泰影院。」\n' +
           '（字条署名空白，由当前好感第二高者所留，制造张力，本章不揭晓。）\n' +
@@ -581,17 +456,7 @@
       {
         name: '第三章 · 影院暗号',
         favorCap: 65,
-        directive: '【本章导演指令 · 第三章】\n' +
-          '走向：主角赴影院之约→字条主人揭晓（好感第二高者）→对方摊出「我知道你不简单」\n' +
-          '的半张底牌，但动机暧昧：是同路、是招揽、还是只为留住主角本人→\n' +
-          '同一时期，主线角色（好感最高者）察觉主角与字条主人来往密切，吃醋与疑虑交织\n' +
-          '→穿插一次主角情报任务借助某位角色之力才能完成的事件（借谁由玩家选项决定，\n' +
-          '本章内须完成）。\n' +
-          '节奏：每句关心都可能是试探，每次试探又掺着真心；心动与警惕并进。\n' +
-          '必须触发：一次「主角在两名角色之间传递假话周旋」的选项轮，\n' +
-          '选项分别倾向坦诚、隐瞒、反将一军，影响伪装与胆识。\n' +
-          '禁止：主角真实身份完全揭穿；任何角色确认主角是地下工作者；告白。\n' +
-          '数值范围：允许好感冲到 65；修罗场值应升至 45-60。',
+        directive: window.WanWanPrompts.render("avg.全局规则.63d738027", []),
         endEvent: '【章末事件指令】借力任务收尾当晚，帮忙的角色轻描淡写要了一个「人情」——内容暧昧不明\n' +
           '（陪一次晚餐/保留一支舞/一个不许问理由的请求），其余高好感角色透过各自渠道很快知情，\n' +
           '修罗场压力显性化。请演出该事件并收束本章，本轮不给选项（choices 为空数组），progress.eventDone 置 true。',
@@ -602,25 +467,9 @@
       {
         name: '第四章 · 绯闻与枪声',
         favorCap: 80,
-        directive: '【本章导演指令 · 第四章】\n' +
-          '走向：小报登出主角与某位角色（当前好感最高者）的绯闻照片→各角色反应分化：\n' +
-          '有人查照片来源、有人吃醋冷战、有人趁虚而入、有人以势压报馆撤稿\n' +
-          '→绯闻风波未平，主角所在情报线上的一位同志暴露被捕，组织要求主角暂停一切活动\n' +
-          '→主角在「避风头」与「冒险救援/传递关键情报」之间抉择（须在本章内给出选项轮），\n' +
-          '胆识与情报属性在此分岔→绯闻以澄清或默认收尾。\n' +
-          '节奏：本作最惊险的一章，浪漫与危机交替，允许出现枪声、追车、雨夜转移\n' +
-          '（惊险但不血腥）。高好感角色必须在危机中亮出真实态度——护、疑、赌、退，\n' +
-          '按其好感与立场关系分化。\n' +
-          '必须触发：一次「某角色在危急时刻为主角挡下盘查/追兵」的事件，\n' +
-          '由好感最高者触发，其立场关系决定挡的方式（权势/金钱/身份/枪口/调虎离山）。\n' +
-          '禁止：主角被捕；任何攻略角色死亡；主角当面承认地下身份。\n' +
-          '数值范围：允许好感冲到 80；修罗场值应升至 55-75。',
+        directive: window.WanWanPrompts.render("avg.全局规则.ce5c7017d", []),
         // 信物轮：例外不用统一收束句，本轮由玩家表态，选择记入存档 tokens
-        endEvent: '【章末事件指令 · 信物轮】风波过后，好感最高者约主角「礼拜六夜里，外白渡桥」；\n' +
-          '当晚其余高好感角色各送来一样东西（船票/手枪/药箱/一封未署名的信）。\n' +
-          '本轮 choices 为主角对信物的整体态度，必须正好三个方向：\n' +
-          '「全部收下」「只收主线角色之外某一人的」「一件不收」，\n' +
-          'effects 影响胆识或伪装，progress.eventDone 置 true。',
+        endEvent: window.WanWanPrompts.render("avg.全局规则.b069a50eb", []),
         endEventChoice: true,
         checkEnd: function(save) {
           return save.drama >= 55 && save.chapterTurns >= 5
@@ -629,21 +478,8 @@
       {
         name: '第五章 · 桥头夜话',
         favorCap: 90,
-        directive: '【本章导演指令 · 第五章】\n' +
-          '走向：外白渡桥夜会→主线角色（好感最高者）摊出自己的底牌\n' +
-          '（其真实立场按立场关系生成：当权者早已暗中周旋保人/世家在为撤资转移做准备/\n' +
-          '同行者亮明同一条线的身份/局外人打算离沪并发出同行邀请/暗处者揭晓真实雇主）\n' +
-          '→并向主角提出一个与终章直接相关的约定→其余角色做最后争取或体面退出\n' +
-          '→安排一次主线角色的「脆弱面」独处事件（旧伤、家书、一张泛黄照片等，深化羁绊）。\n' +
-          '节奏：情感浓度最高的一章，允许暧昧直球：桥头共伞、留声机独舞、\n' +
-          '把大衣披在对方肩上、「等这件事了了，我带你去看海」。\n' +
-          '必须触发：一次「其他角色目击主角与主线角色独处」的修罗场事件，\n' +
-          '目击者反应按其好感与性格分化（成全/死缠/以情报相要挟的危险倾向）。\n' +
-          '禁止：正式告白成功（留给终章）；主线角色 OOC 式突然冷淡；主角身份公开化。\n' +
-          '数值范围：主线角色好感应推到 70-90；修罗场值 55-80。',
-        endEvent: '【章末事件指令】组织传来最终任务：三日后码头有一批「货」必须送出上海，\n' +
-          '主角是唯一能经手的人——而放行的关卡，恰好握在某位攻略角色手里。终章的天平就此立起。\n' +
-          '请演出该事件并收束本章，本轮不给选项（choices 为空数组），progress.eventDone 置 true。',
+        directive: window.WanWanPrompts.render("avg.全局规则.7ae3bf9ff", []),
+        endEvent: window.WanWanPrompts.render("avg.全局规则.e446573ca", []),
         checkEnd: function(save) {
           return maxFavor(save) >= 65 && save.chapterTurns >= 4
         }
@@ -696,16 +532,7 @@
       var ending = SHADOW_GAME.computeEnding(save)
       var main = ending.main
       var name = main ? main.name : '（无）'
-      return '【本章导演指令 · 终章】\n' +
-        '走向：码头之夜，最终任务与感情归属同场结算，本章选项减少（1-2 轮），以演出为主。\n' +
-        '系统判定结果（必须严格照此演出，不得自行改线）：\n' +
-        '- 主线角色：' + name + '（当前好感 ' + (main ? (main.favor || 0) : 0) + '，立场关系：' + (main ? main.seat : '无') + '）\n' +
-        '- 结局线：' + ending.label + ' —— ' + ending.brief + '\n' +
-        '- 信物记录：' + (save.tokens || '（无）') + '（演出中回收）\n' +
-        '写作要求：结局 600-900 字，回收前六章至少 4 个伏笔\n' +
-        '（匿名信、调包字条、那个「人情」、章末信物、桥头约定等），\n' +
-        '末尾附一句「' + name + '线 · 结局达成」标题式收束。\n' +
-        '禁止：新增角色；新增未铺垫的反转；任何攻略角色死亡。'
+      return window.WanWanPrompts.render("avg.buildEndingDirective.0dd987883", [name, main ? (main.favor || 0) : 0, main ? main.seat : '无', ending.label, ending.brief, save.tokens || '（无）', name])
     }
   }
 
@@ -734,42 +561,17 @@
       return k + ' ' + ((save.stats && save.stats[k]) || 0)
     }).join('、')
     var recapBlock = (save.chapterSummaries && save.chapterSummaries.length)
-      ? '【前情提要】以下为已完结章节的剧情摘要，后续剧情必须与之连贯：\n' +
-        save.chapterSummaries.map(function(s) {
+      ? window.WanWanPrompts.render("avg.buildSystemPrompt.a6daa0f0b", [save.chapterSummaries.map(function(s) {
           return '- ' + s.chapter + '：' + s.text
-        }).join('\n') + '\n\n'
+        }).join('\n')])
       : ''
 
-    return G.promptIntro(save) + '\n\n' +
-      '【角色】以下为' + G.adaptedWord + '后的角色档案，性格、说话方式必须严格遵循，不可 OOC：\n' +
-      charLines + '\n\n' +
-      recapBlock +
-      '【当前数值】好感度：' + favorSnapshot + '；主角属性：' + statsSnapshot + '；修罗场值：' + (save.drama || 0) + '。\n' +
-      '角色对主角的态度必须与其好感度区间一致：\n' +
-      G.favorStages + '\n' +
-      G.dramaRule + '\n\n' +
-      directive + '\n\n' +
-      '【写作要求】\n' +
-      G.writingRules + '\n\n' +
-      '【输出格式】\n' +
-      '{\n' +
-      '  "narration": "旁白文本",\n' +
-      '  "dialogues": [\n' +
-      '    { "speaker": "角色名", "text": "台词", "emotion": "' + G.emotions + '" }\n' +
-      '  ],\n' +
-      '  "choices": [\n' +
-      '    { "text": "选项文案",\n' +
-      '      "effects": { "favor": { "角色名": 5 }, "stats": { "' + G.statExample + '": 2 }, "drama": 3 } }\n' +
-      '  ],\n' +
-      (G.hasSuspicion
+    return window.WanWanPrompts.render("avg.buildSystemPrompt.275b4e0b1", [G.promptIntro(save), G.adaptedWord, charLines, recapBlock, favorSnapshot, statsSnapshot, save.drama || 0, G.favorStages, G.dramaRule, directive, G.writingRules, G.emotions, G.statExample, G.hasSuspicion
         ? '  "suspicion": { "角色名": "低|中|高" },\n'
-        : '') +
-      '  "progress": { "eventDone": false, "chapterHint": "距章末还差：xxx" }' +
-      (save.pendingChapterEnd
+        : '', save.pendingChapterEnd
         ? ',\n  "chapterLog": { "角色名": "一句话记录本章该角色与主角的关键互动（每个角色都要有，20字以内）" },' +
           '\n  "chapterSummary": "客观概括本章发生的所有关键事件与人物关系变化，120-180字"'
-        : '') +
-      '\n}'
+        : ''])
   }
 
   // ===================================================================
@@ -1344,7 +1146,7 @@
   async function adaptOneCharacter(ch) {
     var raw = await window.callGameAI(
       [{ role: 'user', content: G.buildAdaptPrompt({ name: ch.name, gender: ch.origGender, persona: ch.origPersona, seat: ch.seat }) }],
-      { responseFormat: 'json_object', temperature: 0.7 }
+      window.WanWanPrompts.options("avg.adaptOneCharacter", ({ responseFormat: 'json_object', temperature: 0.7 }))
     )
     var text = String(raw || '').trim()
       .replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
@@ -1760,11 +1562,11 @@
           await new Promise(function(r) { setTimeout(r, 1000) })
           if (!_game) return
         }
-        var raw = await window.callGameAI(messages, {
+        var raw = await window.callGameAI(messages, window.WanWanPrompts.options("avg.requestTurn", ({
           system: buildSystemPrompt(save),
           responseFormat: 'json_object',
           temperature: 0.85
-        })
+        })))
         if (!_game) return
         var isEmpty = !String(raw || '').trim()
         var scene = isEmpty ? null : parseSceneJSON(raw)

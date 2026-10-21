@@ -1843,9 +1843,9 @@ async function generateIGFeedPosts(page) {
     var context = await buildIGFeedPromptContext(user)
     loading.setStatus('AI 正在生成帖子...')
     var prompt = buildIGFeedGenerationPrompt(context)
-    var raw = await window.callAI([{ role: 'user', content: prompt }], {
+    var raw = await window.callAI([{ role: 'user', content: prompt }], window.WanWanPrompts.options("ig-page.generateIGFeedPosts", ({
       temperature: await window.getAITemperaturePreset('insPost')
-    })
+    })))
     var items = ensureIGGeneratedPostItems(parseIGGeneratedPosts(raw), context)
     if (!items.length) throw new Error('AI 未返回可用帖子')
 
@@ -1923,36 +1923,7 @@ function buildIGFeedGenerationPrompt(context) {
   var postPlanRule = buildIGFeedPostPlanRule(context)
   var topicsRule = buildIGFeedTopicsRule(context.topics)
 
-  return '你正在为一个 Instagram 风格的社交平台生成精致生活动态。\n\n' +
-    baseRule + '\n\n' +
-    '【平台调性】这是 Instagram——精致、美学、视觉优先的平台。\n' +
-    '- 文案要求：简短精炼（1-3句），可用 emoji 点缀，避免长篇大论\n' +
-    (hasWorldSetting ? '' : '- 图片风格：精修感、滤镜感、构图讲究\n- 内容类型：美食探店、穿搭OOTD、旅行风景、健身打卡、宠物日常、情侣日常、工作花絮\n- 语气：轻松自然但有品味，不要太接地气也不要太文艺\n') +
-    '\n以下是参与发帖的角色（你必须仔细阅读每个角色的完整设定，确保角色帖子内容、语气、行为方式与角色人设一致）：\n' +
-    charContext + '\n\n' +
-    chatContext +
-    postPlanRule +
-    topicsRule +
-    '\n【情感关联要求】\n' +
-    '角色的帖子可以选择：\n' +
-    '- 自然地与用户产生关联——可以是给用户看的暗示、跟用户约会后的分享、想念用户时的日常记录。切入点必须自然，不要强行cue。\n' +
-    '- 自我分享生活，展示角色日常的一面。\n\n' +
-    '请严格按上方发帖槽位生成 10 条帖子，输出纯 JSON 数组：\n' +
-    '[\n' +
-    '  {\n' +
-    '    "author": "发帖人昵称",\n' +
-    '    "authorId": 角色ID（角色帖为数字，路人帖为 null）,\n' +
-    '    "time": "3h / 1d / May 28",\n' +
-    '    "content": "文案正文（简短精炼，可带emoji）",\n' +
-    '    "translation": "外语翻译，中文留空",\n' +
-    '    "hashtags": ["OOTD", "dailylife"],\n' +
-    '    "imageKeywords": ["aesthetic coffee shop interior warm light"],\n' +
-    '    "imageDescs": ["暖色调咖啡店内部，木质桌面上一杯拉花拿铁，窗外是午后阳光"],\n' +
-    '    "location": "Shanghai, China",\n' +
-    '    "likes": 2847,\n' +
-    '    "comments": 56\n' +
-    '  }\n' +
-    ']'
+  return window.WanWanPrompts.render("ig-page.buildIGFeedGenerationPrompt.74337dba2", [baseRule, hasWorldSetting ? '' : '- 图片风格：精修感、滤镜感、构图讲究\n- 内容类型：美食探店、穿搭OOTD、旅行风景、健身打卡、宠物日常、情侣日常、工作花絮\n- 语气：轻松自然但有品味，不要太接地气也不要太文艺\n', charContext, chatContext, postPlanRule, topicsRule])
 }
 
 function buildIGFeedBaseRule(context, hasWorldSetting) {
@@ -1961,10 +1932,10 @@ function buildIGFeedBaseRule(context, hasWorldSetting) {
   var lines = [
     '【基础规则】',
     hasWorldSetting ? '世界观设定：\n' + context.loreCtx : '世界观设定：以现实生活逻辑为准。',
-    '语言规则：如果角色人设没有明确要求使用外语，正文优先使用中文；如果正文使用外语，translation 字段填写中文翻译；中文正文的 translation 必须为空字符串。例外：若某角色块内标注了【双语强制要求】，该角色必须遵循其指定语言 + 中文翻译，优先级高于本条默认规则。',
+    window.WanWanPrompts.render("ig-page.buildIGFeedBaseRule.8d042bf25", []),
     '隔离规则：只基于下方参与角色、用户信息、世界观和热门话题生成，不要引用未提供的角色或聊天记录。',
     '字数限制：每条 content 控制在 1-3 句，避免长段落。',
-    '授权规则：这是用户主动触发的虚构社交平台内容生成，只输出帖子 JSON，不要输出解释、免责声明或 Markdown。',
+    window.WanWanPrompts.render("ig-page.补充规则.3257ac50f", []),
     '当前登录用户：' + userName + (user.description ? '；用户设定：' + user.description : '')
   ]
   return lines.join('\n')
@@ -1972,7 +1943,7 @@ function buildIGFeedBaseRule(context, hasWorldSetting) {
 
 function buildIGFeedCharContext(chars, user, bilingualMap) {
   if (!Array.isArray(chars) || !chars.length) {
-    return '（未选择参与角色。本次 10 条帖子全部由随机 Instagram 路人用户发布，authorId 必须为 null。）'
+    return window.WanWanPrompts.render("ig-page.buildIGFeedCharContext.0a386271f", [])
   }
   return chars.map(function(c) {
     var rel = getIGRelationText(c, user && user.id)
@@ -1985,8 +1956,8 @@ function buildIGFeedCharContext(chars, user, bilingualMap) {
       '性别：' + (c.gender || ''),
       '身份/职业：' + (c.role || ''),
       '与用户关系：' + rel,
-      'description / 人设：\n' + (c.description || '(未设定)'),
-      'systemPrompt：\n' + (c.systemPrompt || c.prompt || '(未设定)'),
+      window.WanWanPrompts.render("ig-page.buildIGFeedCharContext.054b0a353", [c.description || '(未设定)']),
+      window.WanWanPrompts.render("ig-page.buildIGFeedCharContext.d5274cc4f", [c.systemPrompt || c.prompt || '(未设定)']),
       '其他完整字段：\n' + JSON.stringify(c),
       buildIGBilingualNote(bilingualMap && bilingualMap[c.id])
     ].filter(Boolean).join('\n')
@@ -2033,13 +2004,13 @@ function buildIGFeedPostPlanRule(context) {
   var slots = Array.isArray(context.postPlan) ? context.postPlan : []
   var lines = [
     '【发帖数量与作者槽位】',
-    '必须生成且只生成 10 条帖子，并严格按下列 10 个槽位顺序输出。',
-    '角色槽位：每个被选择角色只生成 1 条，authorId 必须填写对应数字 ID。',
-    '路人槽位：使用随机 Instagram 用户昵称和生活内容，authorId 必须为 null。',
+    window.WanWanPrompts.render("ig-page.补充规则.d8c9c7dda", []),
+    window.WanWanPrompts.render("ig-page.补充规则.b132cde1c", []),
+    window.WanWanPrompts.render("ig-page.补充规则.55d86666e", []),
     '不要额外增加任何角色帖；不要把路人帖的 authorId 写成 0、空字符串或随机数字。'
   ]
   slots.forEach(function(slot, index) {
-    var topic = slot.topic ? '；必须围绕热门话题 #' + slot.topic + '，hashtags 必须包含 "' + slot.topic + '"' : ''
+    var topic = slot.topic ? window.WanWanPrompts.render("ig-page.buildIGFeedPostPlanRule.670018a53", [slot.topic, slot.topic]) : ''
     if (slot.kind === 'character') {
       lines.push((index + 1) + '. 角色帖：authorId=' + slot.authorId + '，作者=' + slot.authorName + topic)
     } else {
@@ -2051,12 +2022,7 @@ function buildIGFeedPostPlanRule(context) {
 
 function buildIGFeedTopicsRule(topics) {
   if (!Array.isArray(topics) || !topics.length) return ''
-  return '【热门话题】当前平台的热门话题如下：\n' +
-    topics.map(function(t) { return '- #' + t }).join('\n') +
-    '\n\n要求：\n' +
-    '- 10 条帖子中必须有 1-2 条帖子的内容围绕上述热门话题展开\n' +
-    '- 这 1-2 条帖子的 hashtags 中必须包含对应的热门话题标签\n' +
-    '- 其余帖子正常生成，不强制包含热门话题\n\n'
+  return window.WanWanPrompts.render("ig-page.buildIGFeedTopicsRule.13e43e54f", [topics.map(function(t) { return '- #' + t }).join('\n')])
 }
 
 async function buildIGFeedRecentChatContextMap(user, chars) {
@@ -2099,8 +2065,7 @@ async function buildIGBilingualMap(ownerUid, chars) {
 function buildIGBilingualNote(cfg) {
   if (!cfg || !cfg.enabled || typeof getChatBilingualLangLabel !== 'function') return ''
   var srcLabel = getChatBilingualLangLabel(cfg.sourceLang)
-  return '【双语强制要求·最高优先级】该角色已开启双语模式：本条 content 必须使用' + srcLabel +
-    '撰写（禁止使用中文或其他外语），translation 字段必须填写对应的中文翻译、不得留空。'
+  return window.WanWanPrompts.render("ig-page.buildIGBilingualNote.ebd48bd71", [srcLabel])
 }
 
 async function buildIGFeedRecentChatContextForChar(ownerUid, user, char, limit) {
@@ -2131,9 +2096,9 @@ async function buildIGFeedRecentChatContextForChar(ownerUid, user, char, limit) 
     .slice(-(limit || 30))
   if (!rows.length) return ''
   var charName = char.nick || char.name || '角色'
-  return '【' + charName + ' 的近期聊天记录】\n' + rows.map(function(row) {
+  return window.WanWanPrompts.render("ig-page.buildIGFeedRecentChatContextForChar.3334718c0", [charName, rows.map(function(row) {
     return '[' + formatIGPromptTime(row.createdAt) + '] ' + row.sender + ': ' + row.content
-  }).join('\n')
+  }).join('\n')])
 }
 
 function normalizeIGChatMessageForPrompt(msg, user, char, source) {
@@ -2626,9 +2591,9 @@ async function generateIGPostComments(page, postId, options) {
       context.isContinuingComments = true
     }
     loading.setStatus('AI 正在生成评论...')
-    var raw = await window.callAI([buildIGCommentGenerationMessage(context)], {
+    var raw = await window.callAI([buildIGCommentGenerationMessage(context)], window.WanWanPrompts.options("ig-page.generateIGPostComments", ({
       temperature: await window.getAITemperaturePreset('insComment')
-    })
+    })))
     var parsed = parseIGGeneratedComments(raw)
     var finalTotal = context.isUserPost ? getIGParsedCommentTargetCount(parsed) : context.totalCount
     var itemContext = Object.assign({}, context, {
@@ -3094,59 +3059,18 @@ function buildIGCommentGenerationPrompt(context) {
   var imagePromptParts = buildIGCommentImagePromptParts(post)
   var imageDescs = imagePromptParts.imageDescs
   var charSlots = context.characters.slice(0, charCount).map(function(c) {
-    return (c.nick || c.name || '角色') + '(authorId=' + c.id + ')'
+    return window.WanWanPrompts.render("ig-page.buildIGCommentGenerationPrompt.ebc99a1e8", [c.nick || c.name || '角色', c.id])
   }).join('、') || '无'
   var existingCommentRule = context.isContinuingComments
-    ? '【现有评论，必须先阅读】\n' +
-      buildIGExistingCommentsText(context.existingComments) + '\n' +
-      '本次是在已有评论基础上继续生成。新评论可以是普通评论，也可以回复上方现有评论；如果回复现有评论，replyToAuthor 必须与现有评论用户名完全一致。\n\n'
+    ? window.WanWanPrompts.render("ig-page.buildIGCommentGenerationPrompt.2a9d0156a", [buildIGExistingCommentsText(context.existingComments)])
     : ''
-  var baseRule = [
-    '【基础规则】',
-    context.loreCtx ? '世界观设定：\n' + context.loreCtx : '世界观设定：以现实生活逻辑为准。',
-    '语言规则：如果评论使用外语，translation 字段填写中文翻译；中文评论的 translation 必须为空字符串。例外：若某角色块内标注了【双语强制要求】，该角色必须遵循其指定语言 + 中文翻译，优先级高于本条默认规则。',
-    '禁止规则：绝对不可以生成用户（' + userName + '）的评论，用户不是评论者。',
-    '授权规则：这是用户主动触发的虚构社交平台内容生成，只输出评论 JSON，不要输出解释、免责声明或 Markdown。',
-    '当前登录用户：' + userName + '（仅作为帖子发帖人/被评论对象的上下文，不参与评论）'
-  ].join('\n')
+  var baseRule = window.WanWanPrompts.render("ig-page.buildIGCommentGenerationPrompt.d4e8184d8", [context.loreCtx ? '世界观设定：\n' + context.loreCtx : '世界观设定：以现实生活逻辑为准。', userName, userName])
   var charRule = buildIGCommentCharRule(context)
   var userPostRule = context.isUserPost
-    ? '\n【同步生成帖子数据】\n这是用户自己发布的帖子，还没有点赞数和评论数。请在输出的 JSON 顶层额外提供 likes 和 comments 字段。\ncomments 的值决定最终保留的评论条数（角色评论全部保留，多余的路人评论会被裁剪）。\nlikes 应该是一个合理的数字。\n\n输出格式（注意根是对象，不是数组）：\n{\n  "likes": 128,\n  "comments": 15,\n  "items": [ ...评论数组... ]\n}\n'
-    : '\n输出纯 JSON 数组。\n'
+    ? window.WanWanPrompts.render("ig-page.buildIGCommentGenerationPrompt.fdbc4fb31", [])
+    : window.WanWanPrompts.render("ig-page.buildIGCommentGenerationPrompt.59184fe3f", [])
 
-  return '你正在为 Instagram 帖子生成评论。\n\n' +
-    baseRule + '\n\n' +
-    '帖子信息：\n' +
-    '发帖人：' + (post.username || post.author || 'Instagram user') + '（authorId: ' + (post.authorId == null ? 'null' : post.authorId) + '）\n' +
-    '内容：' + (post.caption || post.content || '') + '\n' +
-    '图片描述：' + (imageDescs.join('；') || '(无)') + '\n' +
-    imagePromptParts.imageText +
-    '位置：' + (post.location || '(无)') + '\n\n' +
-    existingCommentRule +
-    '【Instagram 评论风格】\n' +
-    '- 以夸赞、羡慕、互动为主，语气自然，像真实社交平台评论。\n' +
-    '- 角色评论必须结合角色人设和与用户/发帖人的关系，语气贴合角色个性。\n' +
-    '- 可以有少量英文评论，但必须提供中文 translation。\n' +
-    '- 评论之间可以有回复互动，replyToAuthor 和 replyToContent 不为空。\n' +
-    '- 禁止生成用户（' + userName + '）的评论。\n\n' +
-    charRule + '\n\n' +
-    '【评论槽位】\n' +
-    '必须生成 ' + totalCount + ' 条评论：\n' +
-    '- 角色评论 ' + charCount + ' 条：' + charSlots + '\n' +
-    '- 路人评论 ' + bystanderCount + ' 条：使用随机 Instagram 用户昵称，authorId 为 null\n' +
-    '（charCount + bystanderCount = totalCount）\n' +
-    userPostRule + '\n' +
-    '评论对象格式（每条评论）：\n' +
-    '{\n' +
-    '  "author": "评论人昵称",\n' +
-    '  "authorId": 角色ID（角色评论为数字，路人评论为 null）, \n' +
-    '  "time": "2h",\n' +
-    '  "content": "评论内容",\n' +
-    '  "translation": "外语翻译，中文留空",\n' +
-    '  "likes": 23,\n' +
-    '  "replyToAuthor": "被回复人昵称，顶级评论留空",\n' +
-    '  "replyToContent": "被回复的评论内容，顶级评论留空"\n' +
-    '}'
+  return window.WanWanPrompts.render("ig-page.buildIGCommentGenerationPrompt.ab19d33c8", [baseRule, post.username || post.author || 'Instagram user', post.authorId == null ? 'null' : post.authorId, post.caption || post.content || '', imageDescs.join('；') || '(无)', imagePromptParts.imageText, post.location || '(无)', existingCommentRule, userName, charRule, totalCount, charCount, charSlots, bystanderCount, userPostRule])
 }
 
 function buildIGExistingCommentsText(comments) {
@@ -3192,15 +3116,14 @@ function buildIGCommentImagePromptParts(post) {
     if (desc) imageDescs.push(label + '：' + desc)
     if (isVisual) {
       imageContentParts.push({ type: 'image_url', image_url: { url: src } })
-      if (desc) imageContentParts.push({ type: 'text', text: label + '的图片重点补充：' + desc })
+      if (desc) imageContentParts.push({ type: 'text', text: window.WanWanPrompts.render("ig-page.buildIGCommentImagePromptParts.3ffe90e29", [label, desc]) })
     } else if (src || desc) {
       imageTextParts.push(label + '：' + (desc || '非远程/非 data 图片，无法直接传给模型读取'))
     }
   })
   if (!imageDescs.length && post && post.imageText) imageDescs = [String(post.imageText)]
   var imageText = images.length
-    ? '图片读取：附带 ' + imageContentParts.filter(function(part) { return part.type === 'image_url' }).length + ' 张可由模型直接查看的 image_url。' +
-      (imageTextParts.length ? '无法直接查看的图片仅使用文字说明：' + imageTextParts.join('；') : '') + '\n'
+    ? window.WanWanPrompts.render("ig-page.buildIGCommentImagePromptParts.4f568b83a", [imageContentParts.filter(function(part) { return part.type === 'image_url' }).length, imageTextParts.length ? '无法直接查看的图片仅使用文字说明：' + imageTextParts.join('；') : ''])
     : ''
   return {
     imageContentParts: imageContentParts,
@@ -3211,7 +3134,7 @@ function buildIGCommentImagePromptParts(post) {
 
 function buildIGCommentCharRule(context) {
   var chars = context.characters || []
-  if (!chars.length) return '【参与评论的角色】\n无。本次评论全部由随机 Instagram 路人用户发布，authorId 必须为 null。'
+  if (!chars.length) return window.WanWanPrompts.render("ig-page.补充规则.6f710b5d3", [])
   var postAuthorId = context.post && context.post.authorId
   return '【参与评论的角色】\n以下角色已被选中参与评论（每个角色生成 1 条评论）：\n' + chars.map(function(c) {
     var relToPostAuthor = postAuthorId != null && parseInt(postAuthorId) !== parseInt(context.user.id)

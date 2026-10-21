@@ -27,7 +27,8 @@ run('java','-cp',sdk/'lib/d8.jar','com.android.tools.r8.D8','--lib',jar,'--min-a
 with zipfile.ZipFile(out/'unsigned.apk','a',zipfile.ZIP_DEFLATED) as z:
  for p in dex.glob('*.dex'):z.write(p,p.name)
 run(sdk/'zipalign','-f','4',out/'unsigned.apk',out/'aligned.apk')
-apk=out/'WanWan-1.0.0.apk'
+version=re.search(r'android:versionName="([^"]+)"',(root/'app/src/main/AndroidManifest.xml').read_text()).group(1)
+apk=out/('WanWan-'+version+'.apk')
 run('java','-jar',sdk/'lib/apksigner.jar','sign','--ks',os.environ['WANWAN_KEYSTORE'],'--ks-pass','env:WANWAN_STORE_PASS','--ks-key-alias',os.environ.get('WANWAN_KEY_ALIAS','wanwan'),'--out',apk,out/'aligned.apk')
 run('java','-jar',sdk/'lib/apksigner.jar','verify','--verbose',apk)
 print(apk,apk.stat().st_size)

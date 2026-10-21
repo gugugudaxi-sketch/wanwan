@@ -796,20 +796,20 @@
   }
 
   var AI_SYSTEM = {
-    wolf: '你是中文狼人杀中的狼人团队决策器。只能依据提供的公开信息和狼人队友信息选择目标。只输出合法 JSON，字段为 targetId、reason。',
-    witch: '你是中文狼人杀中的女巫。只能依据个人视角决定用药，不得假设其他玩家身份。只输出合法 JSON，字段为 useSave、poisonTargetId、reason。',
-    seer: '你是中文狼人杀中的预言家。根据个人视角选择信息价值最高且未查验的目标。只输出合法 JSON，字段为 targetId、reason。',
-    speech: '你是中文狼人杀玩家。严格使用该玩家视角，发言自然、简洁，不泄露未知身份。只输出合法 JSON，字段为 speech、claim、note；claim 只能是字符串 yes 或 null。',
-    vote: '你是中文狼人杀玩家。严格使用个人视角，根据公开发言投票。只输出合法 JSON，字段为 targetId、reason。',
-    lastWords: '你是刚被白天投出的中文狼人杀玩家。只能根据个人已知信息留下 180 字内遗言。只输出合法 JSON，字段为 speech。',
-    adapt: '你是狼人杀角色风格适配器。输入只来自微信好友对应的角色档案。角色档案有人设时必须保持一致；description 为空时属于正常情况，请根据角色名字为其自动补全一个自然、不过度戏剧化且与其他玩家有区分度的狼人杀人设。不得暗示任何真实身份。只输出合法 JSON，字段 adapted，子项 name、style、speakingStyle、socialGoal。',
-    strangers: '你是狼人杀路人玩家生成器。为预分配 ID 生成不同的自然中文名字和风格，不暗示身份。只输出合法 JSON，字段 strangers，子项 id、name、style、speakingStyle、socialGoal。',
-    teammate: '你是用户的狼人队友。依据自己的性格回应用户的击杀建议，不得假设好人真实身份。只输出合法 JSON，字段 thinking、response、targetId、reason、agree。'
+    wolf: window.WanWanPrompts.render("werewolf-game.全局规则.e6308826b", []),
+    witch: window.WanWanPrompts.render("werewolf-game.全局规则.d9c96e937", []),
+    seer: window.WanWanPrompts.render("werewolf-game.全局规则.e7f88a262", []),
+    speech: window.WanWanPrompts.render("werewolf-game.全局规则.a5b746347", []),
+    vote: window.WanWanPrompts.render("werewolf-game.全局规则.b3da77ad1", []),
+    lastWords: window.WanWanPrompts.render("werewolf-game.全局规则.56a0867a0", []),
+    adapt: window.WanWanPrompts.render("werewolf-game.全局规则.479c4f237", []),
+    strangers: window.WanWanPrompts.render("werewolf-game.全局规则.def54da50", []),
+    teammate: window.WanWanPrompts.render("werewolf-game.全局规则.53af0b0b8", [])
   }
 
   async function rawAI(kind, payload, temperature) {
     if (!window.callGameAI) throw new Error('AI 未配置')
-    var raw = await window.callGameAI([{ role: 'user', content: JSON.stringify(payload) }], { system: AI_SYSTEM[kind], temperature: temperature, responseFormat: 'json_object' })
+    var raw = await window.callGameAI([{ role: 'user', content: JSON.stringify(payload) }], window.WanWanPrompts.options("werewolf-game.rawAI", ({ system: AI_SYSTEM[kind], temperature: temperature, responseFormat: 'json_object' })))
     if (typeof raw === 'object') return raw
     var text = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
     return JSON.parse(text)
